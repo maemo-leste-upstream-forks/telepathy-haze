@@ -1,0 +1,5 @@
+haze (0.1.1-1) UNRELEASED; urgency=low
+
+  * Initial release. (Closes: #438729)
+
+ -- Laurent Bigonville <bigon@bigon.be>  Sun, 19 Aug 2007 14:07:25 +0200
