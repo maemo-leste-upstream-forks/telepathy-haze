@@ -1,4 +1,4 @@
-Source: haze
+Source: telepathy-haze
 Section: net
 Priority: optional
 Maintainer: Telepathy Maintaince Team <pkg-telepathy-maintainers@lists.alioth.debian.org>
@@ -9,7 +9,7 @@ Build-Depends: cdbs,
                pidgin-dev (>= 2.0.0),
                libtelepathy-glib-dev
 Standards-Version: 3.7.2
-XS-Vcs-Bzr: http://bzr.debian.org/pkg-telepathy/packages/unstable/haze/
+XS-Vcs-Bzr: http://bzr.debian.org/pkg-telepathy/packages/unstable/telepathy-haze/
 
 Package: telepathy-haze
 Architecture: any
