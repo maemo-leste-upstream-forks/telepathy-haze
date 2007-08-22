@@ -1,7 +1,7 @@
 Source: telepathy-haze
 Section: net
 Priority: optional
-Maintainer: Telepathy Maintaince Team <pkg-telepathy-maintainers@lists.alioth.debian.org>
+Maintainer: Debian Telepathy maintainers <pkg-telepathy-maintainers@lists.alioth.debian.org>
 Uploaders: Laurent Bigonville <bigon@bigon.be>
 Build-Depends: cdbs,
                debhelper (>= 5),
