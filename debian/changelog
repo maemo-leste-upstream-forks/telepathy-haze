@@ -1,3 +1,9 @@
+telepathy-haze (0.1.1-2) UNRELEASED; urgency=low
+
+  * Use libpurple-dev instead of pidgin-dev as build-dep 
+
+ -- Laurent Bigonville <bigon@bigon.be>  Fri, 24 Aug 2007 15:28:01 +0200
+
 telepathy-haze (0.1.1-1) unstable; urgency=low
 
   [ Laurent Bigonville ]
