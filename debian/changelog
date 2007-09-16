@@ -1,3 +1,10 @@
+telepathy-haze (0.1.2-1) unstable; urgency=low
+
+  * New upstream release
+  * Fix watch file url
+
+ -- Laurent Bigonville <bigon@bigon.be>  Sun, 16 Sep 2007 21:18:12 +0200
+
 telepathy-haze (0.1.1-2) unstable; urgency=low
 
   * Use libpurple-dev instead of pidgin-dev as build-dep
