@@ -16,6 +16,7 @@ Architecture: any
 Section: net
 Depends: ${shlibs:Depends},
          ${misc:Depends}
+Provides: telepathy-connection-manager
 Description: A telepathy connection manager that use libpurple
  Haze is a telepathy connection manager based on libpurple.
  This allow telepathy based application to connect all protocols

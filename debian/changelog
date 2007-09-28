@@ -2,8 +2,9 @@ telepathy-haze (0.1.2-1) unstable; urgency=low
 
   * New upstream release
   * Fix watch file url
+  * Add Provides: telepathy-connection-manager
 
- -- Laurent Bigonville <bigon@bigon.be>  Sun, 16 Sep 2007 21:18:12 +0200
+ -- Laurent Bigonville <bigon@bigon.be>  Fri, 28 Sep 2007 20:20:41 +0200
 
 telepathy-haze (0.1.1-2) unstable; urgency=low
 
