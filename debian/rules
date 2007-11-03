@@ -1,6 +1,22 @@
 #!/usr/bin/make -f
 # -*- makefile -*-
 
+# Upstream releases are going to move CMs to libexecdir soon...
+DEB_CONFIGURE_LIBEXECDIR := "\$${prefix}/lib/telepathy"
+# but haven't done so yet, so let's give Debian a head start
+DEB_CONFIGURE_EXTRA_FLAGS := --bindir=$(DEB_CONFIGURE_LIBEXECDIR)
+
 include /usr/share/cdbs/1/class/autotools.mk
 include /usr/share/cdbs/1/rules/debhelper.mk
 include /usr/share/cdbs/1/rules/simple-patchsys.mk
+
+# List any files which are not installed
+include /usr/share/cdbs/1/rules/utils.mk
+common-binary-post-install-arch:: list-missing
+
+# Man page
+common-post-build-arch::
+	sed -e s!@libexecdir@!/usr/lib/telepathy! \
+		< debian/telepathy-haze.8.in \
+		> telepathy-haze.8
+DEB_INSTALL_MANPAGES_telepathy-haze := telepathy-haze.8
