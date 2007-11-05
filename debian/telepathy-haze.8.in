@@ -2,7 +2,7 @@
 \" This man page was written by Simon McVittie for the Debian project,
 \" but may be used by others.
 \" Copyright © 2007 Collabora Ltd. <http://www.collabora.co.uk/>
-\" It may be distributed under the same terms as telepathy-gabble itself.
+\" It may be distributed under the same terms as telepathy-haze itself.
 .SH NAME
 telepathy-haze \- Telepathy connection manager using libpurple
 .SH SYNOPSIS
