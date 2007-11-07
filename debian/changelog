@@ -1,5 +1,6 @@
 telepathy-haze (0.1.2-2) UNRELEASED; urgency=low
 
+  [ Simon McVittie ]
   * Set libexecdir to /usr/lib/telepathy/ in debian/rules - future upstream
     releases will install to libexecdir, and for Debian we've decided to put
     all Telepathy D-Bus services in the same directory, since each source
@@ -10,7 +11,10 @@ telepathy-haze (0.1.2-2) UNRELEASED; urgency=low
   * Update watch file to point to telepathy.freedesktop.org, now that the
     upstream author can make uploads there (Closes: #450246)
 
- -- Simon McVittie <smcv@ianadd.pseudorandom.co.uk>  Wed, 07 Nov 2007 13:15:54 +0000
+  [ Laurent Bigonville ]
+  * Remove debian/telepathy-haze.8 on clean
+
+ -- Laurent Bigonville <bigon@bigon.be>  Wed, 07 Nov 2007 18:50:35 +0100
 
 telepathy-haze (0.1.2-1) unstable; urgency=low
 

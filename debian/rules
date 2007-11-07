@@ -13,8 +13,11 @@ common-binary-post-install-arch:: list-missing
 common-post-build-arch::
 	sed -e s!@libexecdir@!/usr/lib/telepathy! \
 		< debian/telepathy-haze.8.in \
-		> telepathy-haze.8
-DEB_INSTALL_MANPAGES_telepathy-haze := telepathy-haze.8
+		> debian/telepathy-haze.8
+DEB_INSTALL_MANPAGES_telepathy-haze := debian/telepathy-haze.8
+
+clean::
+	-rm debian/telepathy-haze.8
 
 # Upstream releases are going to move CMs to libexecdir soon...
 DEB_CONFIGURE_LIBEXECDIR := "\$${prefix}/lib/telepathy"
