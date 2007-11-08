@@ -13,8 +13,9 @@ telepathy-haze (0.1.2-2) UNRELEASED; urgency=low
 
   [ Laurent Bigonville ]
   * Remove debian/telepathy-haze.8 on clean
+  * Use now official Vcs-* field
 
- -- Laurent Bigonville <bigon@bigon.be>  Wed, 07 Nov 2007 18:50:35 +0100
+ -- Laurent Bigonville <bigon@bigon.be>  Thu, 08 Nov 2007 05:44:39 +0100
 
 telepathy-haze (0.1.2-1) unstable; urgency=low
 
