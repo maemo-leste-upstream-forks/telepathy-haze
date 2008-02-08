@@ -1,4 +1,4 @@
-telepathy-haze (0.2.0-1) UNRELEASED; urgency=low
+telepathy-haze (0.2.0-1) unstable; urgency=low
 
   * New upstream release
   * debian/control: Add Dm-Upload-Allowed: yes
