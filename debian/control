@@ -10,7 +10,7 @@ Build-Depends: cdbs,
                libtelepathy-glib-dev (>= 0.7)
 Standards-Version: 3.7.2
 Vcs-Bzr: http://bzr.debian.org/pkg-telepathy/packages/unstable/telepathy-haze/
-Dm-Upload-Allowed: yes
+XS-Dm-Upload-Allowed: yes
 
 Package: telepathy-haze
 Architecture: any
