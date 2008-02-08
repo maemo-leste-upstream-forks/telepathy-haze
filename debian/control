@@ -8,7 +8,7 @@ Build-Depends: cdbs,
                pkg-config (>= 0.9.0),
                libpurple-dev (>= 2.1.1),
                libtelepathy-glib-dev (>= 0.7)
-Standards-Version: 3.7.2
+Standards-Version: 3.7.3
 Vcs-Bzr: http://bzr.debian.org/pkg-telepathy/packages/unstable/telepathy-haze/
 XS-Dm-Upload-Allowed: yes
 
