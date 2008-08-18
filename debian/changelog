@@ -1,6 +1,14 @@
-telepathy-haze (0.2.0-2) UNRELEASED; urgency=low
+telepathy-haze (0.2.1-1) UNRELEASED; urgency=low
 
+  [ Laurent Bigonville ]
   * Bump Standards-Version (no further changes)
+
+  [ Simon McVittie ]
+  * New upstream release
+    - Avoids crashing on connection errors like an incorrect password (closes:
+      #495199)
+    - Avoids crashing if the server parameter is blank or contains spaces
+      (closes: #495201)
 
  -- Laurent Bigonville <bigon@bigon.be>  Fri, 08 Feb 2008 13:56:45 +0100
 
