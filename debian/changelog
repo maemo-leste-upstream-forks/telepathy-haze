@@ -1,4 +1,4 @@
-telepathy-haze (0.2.1-1) UNRELEASED; urgency=low
+telepathy-haze (0.2.1-1) experimental; urgency=low
 
   [ Laurent Bigonville ]
   * Bump Standards-Version (no further changes)
@@ -9,8 +9,9 @@ telepathy-haze (0.2.1-1) UNRELEASED; urgency=low
       #495199)
     - Avoids crashing if the server parameter is blank or contains spaces
       (closes: #495201)
+  * Add myself to Uploaders
 
- -- Laurent Bigonville <bigon@bigon.be>  Fri, 08 Feb 2008 13:56:45 +0100
+ -- Simon McVittie <smcv@debian.org>  Mon, 18 Aug 2008 19:01:02 +0100
 
 telepathy-haze (0.2.0-1) unstable; urgency=low
 
