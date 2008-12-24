@@ -1,5 +1,9 @@
 /* config.h.in.  Generated from configure.ac by autoheader.  */
 
+/* Enable the leaky stub implementation of the request API for debugging
+   purposes */
+#undef ENABLE_LEAKY_REQUEST_STUBS
+
 /* Define to 1 if you have the <dlfcn.h> header file. */
 #undef HAVE_DLFCN_H
 

@@ -6,63 +6,177 @@ ObjectPath=/org/freedesktop/Telepathy/ConnectionManager/haze
 param-account=s required
 param-password=s required
 param-server=s
-
-[Protocol local-xmpp]
-param-account=s required
-param-password=s required
-param-server=s
+param-port=i
+param-always-use-rv-proxy=b
+default-server=login.messaging.aol.com
+default-port=5190
+default-always-use-rv-proxy=false
 
 [Protocol gadugadu]
 param-account=s required
 param-password=s required
-param-server=s
+param-nick=s
+default-nick=Gadu-Gadu User
 
 [Protocol groupwise]
 param-account=s required
 param-password=s required
 param-server=s
+param-port=i
+default-port=8300
 
 [Protocol icq]
 param-account=s required
 param-password=s required
 param-server=s
+param-port=i
+param-always-use-rv-proxy=b
+param-charset=s
+default-server=login.messaging.aol.com
+default-port=5190
+default-always-use-rv-proxy=false
+default-charset=UTF-8
 
 [Protocol irc]
 param-account=s required
+param-password=s
+param-port=i
+param-charset=s
+param-username=s
+param-realname=s
+param-ssl=b
+default-port=6667
+default-charset=UTF-8
+default-ssl=false
+
+[Protocol jabber]
+param-account=s required
 param-password=s required
+param-require-encryption=b
+param-old-ssl=b
+param-auth-plain-in-clear=b
+param-port=i
 param-server=s
+param-ft-proxies=s
+default-require-encryption=false
+default-old-ssl=false
+default-auth-plain-in-clear=false
+default-port=5222
+default-ft-proxies=proxy.jabber.org:7777
+
+[Protocol local-xmpp]
+param-account=s required
+param-first-name=s required
+param-last-name=s required
+param-email=s
+param-AIM=s
+param-jid=s
 
 [Protocol msn]
 param-account=s required
 param-password=s required
 param-server=s
+param-port=i
+param-http-method=b
+param-http-method-server=s
+param-custom-smileys=b
+default-server=messenger.hotmail.com
+default-port=1863
+default-http-method=false
+default-http-method-server=gateway.messenger.hotmail.com
+default-custom-smileys=true
+
+[Protocol myspace]
+param-account=s required
+param-password=s required
+param-server=s
+param-port=i
+default-server=im.myspace.akadns.net
+default-port=1863
 
 [Protocol qq]
 param-account=s required
 param-password=s required
+param-use-tcp=b
 param-server=s
-
-[Protocol simple]
-param-account=s required
-param-password=s required
-param-server=s
+param-port=s
+default-use-tcp=false
 
 [Protocol sametime]
 param-account=s required
 param-password=s required
 param-server=s
+param-port=i
+param-force-login=b
+param-fake-client-id=b
+default-port=1533
+default-force-login=false
+default-fake-client-id=false
 
-[Protocol jabber]
+[Protocol simple]
 param-account=s required
 param-password=s required
+param-dopublish=b
+param-port=i
+param-udp=b
+param-useproxy=b
+param-proxy=s
+param-authuser=s
+param-authdomain=s
+default-dopublish=true
+default-port=0
+default-udp=false
+default-useproxy=false
+
+[Protocol snpp]
+param-account=s required
+param-password=s
 param-server=s
+param-port=i
+default-server=localhost
+default-port=444
 
 [Protocol yahoo]
 param-account=s required
 param-password=s required
+param-yahoojp=b
 param-server=s
+param-serverjp=s
+param-port=i
+param-xfer-host=s
+param-xferjp-host=s
+param-xfer-port=i
+param-room-list-locale=s
+param-ignore-invites=b
+param-charset=s
+default-yahoojp=false
+default-server=scs.msg.yahoo.com
+default-serverjp=cs.yahoo.co.jp
+default-port=5050
+default-xfer-host=filetransfer.msg.yahoo.com
+default-xferjp-host=filetransfer.msg.yahoo.co.jp
+default-xfer-port=80
+default-room-list-locale=us
+default-ignore-invites=false
+default-charset=UTF-8
 
 [Protocol zephyr]
 param-account=s required
-param-password=s required
-param-server=s
+param-use-tzc=b
+param-tzc-command=s
+param-write-anyone=b
+param-write-zsubs=b
+param-read-anyone=b
+param-read-zsubs=b
+param-realm=s
+param-exposure-level=s
+param-charset=s
+default-use-tzc=false
+default-tzc-command=/usr/bin/tzc -e %s
+default-write-anyone=false
+default-write-zsubs=false
+default-read-anyone=true
+default-read-zsubs=true
+default-exposure-level=REALM-VISIBLE
+default-charset=UTF-8
+

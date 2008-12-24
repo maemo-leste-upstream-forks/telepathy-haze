@@ -40,12 +40,13 @@
 #include <libpurple/util.h>
 
 #ifdef HAVE_PURPLE_DBUS_UNINIT
-#  if PURPLE_VERSION_CHECK(2,1,1)
-/* Before 2.1.1, this include failed because dbus-types.h was not installed. */
-#    include <libpurple/dbus-server.h>
-#  else
-void purple_dbus_uninit(void);
-#  endif
+#include <libpurple/dbus-server.h>
+#endif
+
+#if !PURPLE_VERSION_CHECK (2, 4, 0)
+extern const guint purple_major_version;
+extern const guint purple_minor_version;
+extern const guint purple_micro_version;
 #endif
 
 #include <telepathy-glib/run.h>
@@ -54,6 +55,8 @@ void purple_dbus_uninit(void);
 #include "defines.h"
 #include "debug.h"
 #include "connection-manager.h"
+#include "notify.h"
+#include "request.h"
 
 /* Copied verbatim from nullclient, modulo changing whitespace. */
 #define PURPLE_GLIB_READ_COND  (G_IO_IN | G_IO_HUP | G_IO_ERR)
@@ -137,6 +140,10 @@ haze_ui_init ()
     purple_accounts_set_ui_ops (haze_get_account_ui_ops ());
     purple_conversations_set_ui_ops (haze_get_conv_ui_ops ());
     purple_connections_set_ui_ops (haze_get_connection_ui_ops ());
+#ifdef ENABLE_LEAKY_REQUEST_STUBS
+    purple_request_set_ui_ops (haze_request_get_ui_ops ());
+#endif
+    purple_notify_set_ui_ops (haze_notify_get_ui_ops ());
 }
 
 static PurpleCoreUiOps haze_core_uiops = 
@@ -184,6 +191,10 @@ init_libpurple()
     purple_blist_load();
 
     purple_prefs_load();
+
+    DEBUG ("libpurple %d.%d.%d loaded (compiled against %d.%d.%d)",
+        purple_major_version, purple_minor_version, purple_micro_version,
+        PURPLE_MAJOR_VERSION, PURPLE_MINOR_VERSION, PURPLE_MICRO_VERSION);
 }
 
 static TpBaseConnectionManager *

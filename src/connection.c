@@ -39,13 +39,11 @@
 
 enum
 {
-    PROP_USERNAME = 1,
-    PROP_PASSWORD,
-    PROP_SERVER,
+    PROP_PARAMETERS = 1,
     PROP_PROTOCOL_INFO,
 
     LAST_PROPERTY
-};
+} HazeConnectionProperties;
 
 G_DEFINE_TYPE_WITH_CODE(HazeConnection,
     haze_connection,
@@ -60,11 +58,11 @@ G_DEFINE_TYPE_WITH_CODE(HazeConnection,
 
 typedef struct _HazeConnectionPrivate
 {
-    char *username;
-    char *password;
-    char *server;
+    GHashTable *parameters;
 
     HazeProtocolInfo *protocol_info;
+
+    gboolean dispose_has_run;
 } HazeConnectionPrivate;
 
 #define HAZE_CONNECTION_GET_PRIVATE(o) \
@@ -72,6 +70,22 @@ typedef struct _HazeConnectionPrivate
 
 #define PC_GET_BASE_CONN(pc) \
     (ACCOUNT_GET_TP_BASE_CONNECTION (purple_connection_get_account (pc)))
+
+static const gchar *
+_get_param_string (GHashTable *parameters,
+                   const gchar *key)
+{
+    GValue *value = (GValue *) g_hash_table_lookup (parameters, key);
+    if (value)
+    {
+        g_assert (G_VALUE_TYPE (value) == G_TYPE_STRING);
+        return (g_value_get_string (value));
+    }
+    else
+    {
+        return NULL;
+    }
+}
 
 void
 connected_cb (PurpleConnection *pc)
@@ -203,43 +217,85 @@ disconnected_cb (PurpleConnection *pc)
 }
 
 static void
+_warn_unhandled_parameter (const gchar *key,
+                           const GValue *value,
+                           gpointer user_data)
+{
+    g_warning ("received an unknown parameter '%s'; ignoring", key);
+}
+
+struct _i_want_closure
+{
+    PurpleAccount *account;
+    GHashTable *params;
+};
+
+static void
+_set_option (const PurpleAccountOption *option,
+             struct _i_want_closure *context)
+{
+    GValue *value = g_hash_table_lookup (context->params, option->pref_name);
+    if (!value)
+        return;
+
+    switch (option->type)
+    {
+        case PURPLE_PREF_BOOLEAN:
+            g_assert (G_VALUE_TYPE (value) == G_TYPE_BOOLEAN);
+            purple_account_set_bool (context->account, option->pref_name,
+                g_value_get_boolean (value));
+            break;
+        case PURPLE_PREF_INT:
+            g_assert (G_VALUE_TYPE (value) == G_TYPE_INT);
+            purple_account_set_int (context->account, option->pref_name,
+                g_value_get_int (value));
+            break;
+        case PURPLE_PREF_STRING:
+            g_assert (G_VALUE_TYPE (value) == G_TYPE_STRING);
+            purple_account_set_string (context->account, option->pref_name,
+                g_value_get_string (value));
+            break;
+        default:
+            g_warning ("option '%s' has unhandled type %u",
+                option->pref_name, option->type);
+    }
+
+    g_hash_table_remove (context->params, option->pref_name);
+}
+
+static void
 _create_account (HazeConnection *self)
 {
     HazeConnectionPrivate *priv = HAZE_CONNECTION_GET_PRIVATE(self);
-
-    PurpleAccount *account;
+    GHashTable *params = priv->parameters;
     PurplePluginProtocolInfo *prpl_info = priv->protocol_info->prpl_info;
 
+    const gchar *username, *password;
+    struct _i_want_closure context;
+
+    username = _get_param_string (params, "account");
+    g_assert (username);
+
     g_assert (self->account == NULL);
+    self->account = purple_account_new (username, priv->protocol_info->prpl_id);
+    purple_accounts_add (self->account);
+    g_assert (self->account);
+    g_hash_table_remove (params, "account");
 
-    account = self->account =
-        purple_account_new(priv->username, priv->protocol_info->prpl_id);
-    purple_accounts_add (account);
+    self->account->ui_data = self;
 
-    account->ui_data = self;
-    purple_account_set_password (account, priv->password);
-
-    if (priv->server && *priv->server)
+    password = _get_param_string (params, "password");
+    if (password)
     {
-        GList *l;
-        PurpleAccountOption *option;
-
-        /* :'-( :'-( :'-( :'-( */
-        for (l = prpl_info->protocol_options; l != NULL; l = l->next)
-        {
-            option = (PurpleAccountOption *)l->data;
-            if (!strcmp (option->pref_name, "server") /* oscar */
-                || !strcmp (option->pref_name, "connect_server")) /* xmpp */
-            {
-                purple_account_set_string (account, option->pref_name,
-                                           priv->server);
-                break;
-            }
-        }
-        if (l == NULL)
-            g_warning ("server specified, but corresponding protocol option "
-                "not found!");
+        purple_account_set_password (self->account, password);
+        g_hash_table_remove (params, "password");
     }
+
+    context.account = self->account;
+    context.params = params;
+    g_list_foreach (prpl_info->protocol_options, (GFunc) _set_option, &context);
+
+    g_hash_table_foreach (params, (GHFunc) _warn_unhandled_parameter, "lala");
 }
 
 static gboolean
@@ -346,14 +402,8 @@ haze_connection_get_property (GObject    *object,
     HazeConnectionPrivate *priv = HAZE_CONNECTION_GET_PRIVATE(self);
 
     switch (property_id) {
-        case PROP_USERNAME:
-            g_value_set_string (value, priv->username);
-            break;
-        case PROP_PASSWORD:
-            g_value_set_string (value, priv->password);
-            break;
-        case PROP_SERVER:
-            g_value_set_string (value, priv->server);
+        case PROP_PARAMETERS:
+            g_value_set_pointer (value, priv->parameters);
             break;
         case PROP_PROTOCOL_INFO:
             g_value_set_pointer (value, priv->protocol_info);
@@ -374,17 +424,9 @@ haze_connection_set_property (GObject      *object,
     HazeConnectionPrivate *priv = HAZE_CONNECTION_GET_PRIVATE(self);
 
     switch (property_id) {
-        case PROP_USERNAME:
-            g_free (priv->username);
-            priv->username = g_value_dup_string(value);
-            break;
-        case PROP_PASSWORD:
-            g_free (priv->password);
-            priv->password = g_value_dup_string(value);
-            break;
-        case PROP_SERVER:
-            g_free (priv->server);
-            priv->server = g_value_dup_string(value);
+        case PROP_PARAMETERS:
+            priv->parameters = g_value_get_pointer (value);
+            g_hash_table_ref (priv->parameters);
             break;
         case PROP_PROTOCOL_INFO:
             priv->protocol_info = g_value_get_pointer (value);
@@ -403,8 +445,11 @@ haze_connection_constructor (GType type,
     HazeConnection *self = HAZE_CONNECTION (
             G_OBJECT_CLASS (haze_connection_parent_class)->constructor (
                 type, n_construct_properties, construct_params));
+    HazeConnectionPrivate *priv = HAZE_CONNECTION_GET_PRIVATE (self);
 
     DEBUG ("Post-construction: (HazeConnection *)%p", self);
+
+    priv->dispose_has_run = FALSE;
 
     _create_account (self);
 
@@ -415,8 +460,17 @@ static void
 haze_connection_dispose (GObject *object)
 {
     HazeConnection *self = HAZE_CONNECTION(object);
+    HazeConnectionPrivate *priv = HAZE_CONNECTION_GET_PRIVATE (self);
+
+    if (priv->dispose_has_run)
+        return;
+
+    priv->dispose_has_run = TRUE;
 
     DEBUG ("disposing of (HazeConnection *)%p", self);
+
+    g_hash_table_unref (priv->parameters);
+    priv->parameters = NULL;
 
     G_OBJECT_CLASS (haze_connection_parent_class)->dispose (object);
 }
@@ -424,14 +478,6 @@ haze_connection_dispose (GObject *object)
 static void
 haze_connection_finalize (GObject *object)
 {
-    HazeConnection *self = HAZE_CONNECTION (object);
-    HazeConnectionPrivate *priv = HAZE_CONNECTION_GET_PRIVATE(self);
-
-    g_free (priv->username);
-    g_free (priv->password);
-    g_free (priv->server);
-    self->priv = NULL;
-
     tp_presence_mixin_finalize (object);
 
     G_OBJECT_CLASS (haze_connection_parent_class)->finalize (object);
@@ -470,32 +516,15 @@ haze_connection_class_init (HazeConnectionClass *klass)
     base_class->shut_down = _haze_connection_shut_down;
     base_class->interfaces_always_present = interfaces_always_present;
 
-    param_spec = g_param_spec_string ("username", "Account username",
-                                      "The username used when authenticating.",
-                                      NULL,
-                                      G_PARAM_CONSTRUCT_ONLY |
-                                      G_PARAM_READWRITE |
-                                      G_PARAM_STATIC_NAME |
-                                      G_PARAM_STATIC_BLURB);
-    g_object_class_install_property (object_class, PROP_USERNAME, param_spec);
-
-    param_spec = g_param_spec_string ("password", "Account password",
-                                      "The password used when authenticating.",
-                                      NULL,
-                                      G_PARAM_CONSTRUCT_ONLY |
-                                      G_PARAM_READWRITE |
-                                      G_PARAM_STATIC_NAME |
-                                      G_PARAM_STATIC_BLURB);
-    g_object_class_install_property (object_class, PROP_PASSWORD, param_spec);
-
-    param_spec = g_param_spec_string ("server", "Hostname or IP of server",
-                                      "The server used when establishing a connection.",
-                                      NULL,
-                                      G_PARAM_CONSTRUCT_ONLY |
-                                      G_PARAM_READWRITE |
-                                      G_PARAM_STATIC_NAME |
-                                      G_PARAM_STATIC_BLURB);
-    g_object_class_install_property (object_class, PROP_SERVER, param_spec);
+    param_spec = g_param_spec_pointer ("parameters",
+                                       "GHashTable of gchar * => GValue",
+                                       "Connection parameters (username, "
+                                       "password, etc.)",
+                                       G_PARAM_CONSTRUCT_ONLY |
+                                       G_PARAM_READWRITE |
+                                       G_PARAM_STATIC_NAME |
+                                       G_PARAM_STATIC_BLURB);
+    g_object_class_install_property (object_class, PROP_PARAMETERS, param_spec);
 
     param_spec = g_param_spec_pointer ("protocol-info",
                                        "HazeProtocolInfo instance",
@@ -533,27 +562,16 @@ request_authorize_cb (PurpleAccount *account,
                       const char *alias,
                       const char *message,
                       gboolean on_list,
-#if PURPLE_VERSION_CHECK(2,1,1)
                       PurpleAccountRequestAuthorizationCb authorize_cb,
                       PurpleAccountRequestAuthorizationCb deny_cb,
-#else
-                      GCallback authorize_cb,
-                      GCallback deny_cb,
-#endif
                       void *user_data)
 {
     /* Woo for argument lists which are longer than the function! */
-    PurpleAccountRequestAuthorizationCb cb =
-#if PURPLE_VERSION_CHECK(2,1,1)
-        authorize_cb;
-#else
-        (PurpleAccountRequestAuthorizationCb) authorize_cb;
-#endif
 
     /* FIXME: Implement the publish list, then deal with this properly. */
     DEBUG ("[%s] Quietly authorizing presence subscription from '%s'...",
              account->username, remote_user);
-    cb (user_data);
+    authorize_cb (user_data);
     return NULL;
 }
 

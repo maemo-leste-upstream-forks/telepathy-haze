@@ -7,8 +7,8 @@ AC_PREREQ([2.59])
 #  set nano_version to 1
 
 m4_define([haze_major_version], [0])
-m4_define([haze_minor_version], [1])
-m4_define([haze_micro_version], [4])
+m4_define([haze_minor_version], [2])
+m4_define([haze_micro_version], [0])
 m4_define([haze_nano_version], [0])
 
 m4_define([haze_base_version],
@@ -61,11 +61,16 @@ ifelse(haze_nano_version, 0, [],
 
 AC_SUBST(ERROR_CFLAGS)
 
-PKG_CHECK_MODULES(PURPLE,[purple >= 2.0.0])
+AC_ARG_ENABLE(leaky-request-stubs,
+  AC_HELP_STRING([--enable-leaky-request-stubs],[print debugging information when libpurple attempts to use the request API (warning: very leaky)]),
+  AC_DEFINE(ENABLE_LEAKY_REQUEST_STUBS, [], [Enable the leaky stub implementation of the request API for debugging purposes]))
+AC_SUBST(ENABLE_LEAKY_REQUEST_STUBS)
+
+PKG_CHECK_MODULES(PURPLE,[purple >= 2.1.1])
 AC_SUBST(PURPLE_CFLAGS)
 AC_SUBST(PURPLE_LIBS)
 
-PKG_CHECK_MODULES(TP_GLIB,[telepathy-glib])
+PKG_CHECK_MODULES(TP_GLIB,[telepathy-glib >= 0.7])
 AC_SUBST(TP_GLIB_CFLAGS)
 AC_SUBST(TP_GLIB_LIBS)
 

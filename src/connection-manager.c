@@ -34,54 +34,212 @@ G_DEFINE_TYPE(HazeConnectionManager,
     haze_connection_manager,
     TP_TYPE_BASE_CONNECTION_MANAGER)
 
-typedef struct _HazeParams HazeParams;
-
-struct _HazeParams {
-    gchar *username;
-    gchar *password;
-    gchar *server;
-};
-
-/** These are protocols for which stripping off the "prpl-" prefix is not
- *  sufficient, or for which special munging has to be done.
+/* For some protocols, removing the "prpl-" prefix from its name in libpurple
+ * doesn't give the right name for Telepathy.  Other protocols need some
+ * parameters renaming to match well-known names in the spec, or to have
+ * hyphens rather than underscores for consistency.
  */
 static HazeProtocolInfo known_protocol_info[] = {
-    { "gadugadu",   "prpl-gg",          NULL },
-    { "groupwise",  "prpl-novell",      NULL },
-    { "irc",        "prpl-irc",         NULL },
-    { "sametime",   "prpl-meanwhile",   NULL },
-    { "local-xmpp", "prpl-bonjour",     NULL },
-    { NULL,         NULL,               NULL }
-};
-
-static const TpCMParamSpec params[] = {
-  { "account", DBUS_TYPE_STRING_AS_STRING, G_TYPE_STRING,
-    TP_CONN_MGR_PARAM_FLAG_REQUIRED, NULL,
-    G_STRUCT_OFFSET(HazeParams, username), NULL, NULL },
-  { "password", DBUS_TYPE_STRING_AS_STRING, G_TYPE_STRING,
-    /* FIXME: zephyr for instance doesn't need a password */
-    TP_CONN_MGR_PARAM_FLAG_REQUIRED, NULL,
-    G_STRUCT_OFFSET(HazeParams, password), NULL, NULL },
-  { "server", DBUS_TYPE_STRING_AS_STRING, G_TYPE_STRING, 0, NULL,
-    G_STRUCT_OFFSET(HazeParams, server), NULL, NULL },
-  { NULL, NULL, 0, 0, NULL, 0, NULL, NULL }
+    { "aim",        "prpl-aim",         NULL,
+        "always_use_rv_proxy:always-use-rv-proxy" },
+    { "gadugadu",   "prpl-gg",          NULL, "" },
+    { "groupwise",  "prpl-novell",      NULL, "" },
+    { "irc",        "prpl-irc",         NULL, "encoding:charset" },
+    { "icq",        "prpl-icq",         NULL,
+        "encoding:charset,always_use_rv_proxy:always-use-rv-proxy" },
+    { "jabber",     "prpl-jabber",      NULL,
+        "connect_server:server,old_ssl:old-ssl,require_tls:require-encryption,"
+        "auth_plain_in_clear:auth-plain-in-clear,ft_proxies:ft-proxies" },
+    { "local-xmpp", "prpl-bonjour",     NULL,
+        "first:first-name,last:last-name" },
+    { "msn",        "prpl-msn",         NULL,
+        "http_method:http-method,http_method_server:http-method-server,"
+        "custom_smileys:custom-smileys" },
+    { "qq",         "prpl-qq",          NULL, "use_tcp:use-tcp" },
+    { "sametime",   "prpl-meanwhile",   NULL,
+        "force_login:force-login,fake_client_id:fake-client-id" },
+    { "yahoo",      "prpl-yahoo",       NULL,
+        "local_charset:charset,xfer_host:xfer-host,xferjp_host:xferjp-host,"
+        "xfer_port:xfer-port,room_list_locale:room-list-locale,"
+        "ignore_invites:ignore-invites" },
+    { "zephyr",     "prpl-zephyr",      NULL,
+        "encoding:charset,use_tzc:use-tzc,tzc_command:tzc-command,"
+        "write_anyone:write-anyone,write_zsubs:write-zsubs,"
+        "read_anyone:read-anyone,read_zsubs:read-zsubs,"
+        "exposure_level:exposure-level" },
+    { NULL,         NULL,               NULL, "" }
 };
 
 static void *
-alloc_params (void)
+_haze_cm_alloc_params (void)
 {
-  return g_new0 (HazeParams, 1);
+    /* (gchar *) => (GValue *) */
+    return g_hash_table_new_full (g_str_hash, g_str_equal, NULL,
+        (GDestroyNotify) tp_g_value_slice_free);
 }
 
 static void
-free_params (void *p)
+_haze_cm_free_params (void *p)
 {
-    HazeParams *params = (HazeParams *)p;
-    g_free (params->username);
-    g_free (params->password);
-    g_free (params->server);
+    GHashTable *params = (GHashTable *)p;
+    g_hash_table_unref (params);
+}
 
-    g_free (params);
+static void
+_haze_cm_set_param (const TpCMParamSpec *paramspec,
+                    const GValue *value,
+                    gpointer params_)
+{
+    GHashTable *params = (GHashTable *) params_;
+    GValue *value_copy = tp_g_value_slice_new (paramspec->gtype);
+    gchar *prpl_param_name = (gchar *) paramspec->setter_data;
+
+    g_assert (G_VALUE_TYPE (value) == G_VALUE_TYPE (value_copy));
+
+    g_value_copy (value, value_copy);
+
+    DEBUG ("setting parameter %s (telepathy name %s)",
+        prpl_param_name, paramspec->name);
+
+    g_hash_table_insert (params, prpl_param_name, value_copy);
+}
+
+/* Populates a TpCMParamSpec from a PurpleAccountOption, possibly renaming the
+ * parameter as specified in parameter_map.  paramspec is assumed to be zeroed out.
+ * Returns TRUE on success, and FALSE if paramspec could not be populated (and
+ * thus should not be used).
+ */
+static gboolean
+_translate_protocol_option (PurpleAccountOption *option,
+                            TpCMParamSpec *paramspec,
+                            HazeProtocolInfo *hpi,
+                            GHashTable *parameter_map)
+{
+    const char *pref_name = purple_account_option_get_setting (option);
+    PurplePrefType pref_type = purple_account_option_get_type (option);
+    gchar *name = g_hash_table_lookup (parameter_map, pref_name);
+    /* These strings are never free'd, but need to last until exit anyway.
+     */
+    paramspec->name = g_strdup (name ? name : pref_name);
+    paramspec->setter_data = option->pref_name;
+    /* TODO: does libpurple ever require a parameter besides the username
+     *       and possibly password?
+     */
+    paramspec->flags = 0;
+
+    switch (pref_type)
+    {
+        case PURPLE_PREF_BOOLEAN:
+            paramspec->dtype = DBUS_TYPE_BOOLEAN_AS_STRING;
+            paramspec->gtype = G_TYPE_BOOLEAN;
+            paramspec->flags |= TP_CONN_MGR_PARAM_FLAG_HAS_DEFAULT;
+            paramspec->def = GINT_TO_POINTER (
+                purple_account_option_get_default_bool (option));
+            break;
+        case PURPLE_PREF_INT:
+            paramspec->dtype = DBUS_TYPE_INT32_AS_STRING;
+            paramspec->gtype = G_TYPE_INT;
+            paramspec->flags |= TP_CONN_MGR_PARAM_FLAG_HAS_DEFAULT;
+            paramspec->def = GINT_TO_POINTER (
+                purple_account_option_get_default_int (option));
+            break;
+        case PURPLE_PREF_STRING:
+        {
+            const gchar *def;
+
+            paramspec->dtype = DBUS_TYPE_STRING_AS_STRING;
+            paramspec->gtype = G_TYPE_STRING;
+
+            /* prpl-bonjour chooses the defaults for these parameters with
+             * getpwuid(3); but for haze's purposes that's the UI's job.
+             */
+            if (g_str_equal (hpi->prpl_id, "prpl-bonjour")
+                && (g_str_equal (paramspec->name, "first-name")
+                    || g_str_equal (paramspec->name, "last-name")))
+            {
+                paramspec->flags |= TP_CONN_MGR_PARAM_FLAG_REQUIRED;
+                break;
+            }
+
+            if (g_str_equal (paramspec->name, "charset"))
+                def = "UTF-8";
+            else
+                def = purple_account_option_get_default_string (option);
+
+            if (def && *def)
+            {
+                paramspec->def = g_strdup (def);
+                paramspec->flags |= TP_CONN_MGR_PARAM_FLAG_HAS_DEFAULT;
+            }
+            break;
+        }
+        default:
+            g_warning ("account option %s has unknown type %u; ignoring",
+                pref_name, pref_type);
+            return FALSE;
+    }
+
+    return TRUE;
+}
+
+/* Constructs a parameter specification from the prpl's options list, renaming
+ * protocols and parameters according to known_protocol_info.
+ */
+static TpCMParamSpec *
+_build_paramspecs (HazeProtocolInfo *hpi)
+{
+    const TpCMParamSpec account_spec =
+        { "account", DBUS_TYPE_STRING_AS_STRING, G_TYPE_STRING,
+          TP_CONN_MGR_PARAM_FLAG_REQUIRED, NULL, 0, NULL, NULL,
+          (gpointer) "account", NULL };
+    TpCMParamSpec password_spec =
+        { "password", DBUS_TYPE_STRING_AS_STRING, G_TYPE_STRING,
+          TP_CONN_MGR_PARAM_FLAG_REQUIRED, NULL, 0, NULL, NULL,
+          (gpointer) "password", NULL };
+
+    GArray *paramspecs = g_array_new (TRUE, TRUE, sizeof (TpCMParamSpec));
+    GList *opts;
+
+    /* Deserialize the hpi->parameter_map string to a hash table;
+     *     "libpurple_name1:telepathy-name1,libpurple_name2:telepathy-name2"
+     * becomes
+     *     "libpurple_name1" => "telepathy-name1"
+     *     "libpurple_name2" => "telepathy-name2"
+     */
+    GHashTable *parameter_map = g_hash_table_new (g_str_hash, g_str_equal);
+    gchar **map_chunks = g_strsplit_set (hpi->parameter_map, ",:", 0);
+    int i;
+    for (i = 0; map_chunks[i] != NULL; i = i + 2)
+    {
+        g_assert (map_chunks[i+1] != NULL);
+        g_hash_table_insert (parameter_map, map_chunks[i], map_chunks[i+1]);
+    }
+
+    /* TODO: local-xmpp shouldn't have an account parameter */
+    g_array_append_val (paramspecs, account_spec);
+
+    /* Password parameter: */
+    if (!(hpi->prpl_info->options & OPT_PROTO_NO_PASSWORD))
+    {
+        if (hpi->prpl_info->options & OPT_PROTO_PASSWORD_OPTIONAL)
+            password_spec.flags = 0;
+        g_array_append_val (paramspecs, password_spec);
+    }
+
+    for (opts = hpi->prpl_info->protocol_options; opts; opts = opts->next)
+    {
+        PurpleAccountOption *option = (PurpleAccountOption *)opts->data;
+        TpCMParamSpec paramspec =
+            { NULL, NULL, 0, 0, NULL, 0, NULL, NULL, NULL, NULL};
+
+        if (_translate_protocol_option (option, &paramspec, hpi, parameter_map))
+            g_array_append_val (paramspecs, paramspec);
+    }
+
+    g_hash_table_destroy (parameter_map);
+    g_strfreev (map_chunks);
+
+    return (TpCMParamSpec *) g_array_free (paramspecs, FALSE);
 }
 
 struct _protocol_info_foreach_data
@@ -101,11 +259,22 @@ _protocol_info_foreach (gpointer key,
     TpCMProtocolSpec *protocol = &(data->protocols[data->index]);
 
     protocol->name = info->tp_protocol_name;
-    protocol->parameters = params;
-    protocol->params_new = alloc_params;
-    protocol->params_free = free_params;
+    protocol->parameters = _build_paramspecs (info);
+    protocol->params_new = _haze_cm_alloc_params;
+    protocol->params_free = _haze_cm_free_params;
+    protocol->set_param = _haze_cm_set_param;
 
     (data->index)++;
+}
+
+static int
+_compare_protocol_names(gconstpointer a,
+                        gconstpointer b)
+{
+    const TpCMProtocolSpec *protocol_a = a;
+    const TpCMProtocolSpec *protocol_b = b;
+
+    return strcmp(protocol_a->name, protocol_b->name);
 }
 
 static TpCMProtocolSpec *
@@ -122,6 +291,24 @@ get_protocols (HazeConnectionManagerClass *klass)
 
     g_hash_table_foreach (klass->protocol_info_table, _protocol_info_foreach,
         &foreach_data);
+
+    qsort (protocols, n_protocols, sizeof (TpCMProtocolSpec),
+        _compare_protocol_names);
+
+    {
+        GString *debug_string = g_string_new ("");
+        TpCMProtocolSpec *p = protocols;
+        while (p->name != NULL)
+        {
+            g_string_append (debug_string, p->name);
+            p += 1;
+            if (p->name != NULL)
+                g_string_append (debug_string, ", ");
+        }
+
+        DEBUG ("Found protocols %s", debug_string->str);
+        g_string_free (debug_string, TRUE);
+    }
 
     return protocols;
 }
@@ -161,15 +348,13 @@ _haze_connection_manager_new_connection (TpBaseConnectionManager *base,
 {
     HazeConnectionManager *cm = HAZE_CONNECTION_MANAGER(base);
     HazeConnectionManagerClass *klass = HAZE_CONNECTION_MANAGER_GET_CLASS (cm);
-    HazeParams *params = (HazeParams *)parsed_params;
+    GHashTable *params = (GHashTable *)parsed_params;
     HazeProtocolInfo *info =
         g_hash_table_lookup (klass->protocol_info_table, proto);
     HazeConnection *conn = g_object_new (HAZE_TYPE_CONNECTION,
                                          "protocol",        proto,
                                          "protocol-info",   info,
-                                         "username",        params->username,
-                                         "password",        params->password,
-                                         "server",          params->server,
+                                         "parameters",      params,
                                          NULL);
 
     cm->connections = g_list_prepend(cm->connections, conn);
@@ -205,27 +390,6 @@ _compare_protocol_id (gpointer key,
     return (!strcmp (info->prpl_id, prpl_id));
 }
 
-static void
-get_values_foreach (gpointer key,
-                    gpointer value,
-                    gpointer data)
-{
-    GList **values = data;
-
-    *values = g_list_prepend (*values, value);
-}
-
-/* Equivalent to g_hash_table_get_values, which only exists in GLib >=2.14. */
-static GList *
-haze_g_hash_table_get_values (GHashTable *table)
-{
-    GList *values = NULL;
-
-    g_hash_table_foreach (table, get_values_foreach, &values);
-
-    return values;
-}
-
 static void _init_protocol_table (HazeConnectionManagerClass *klass)
 {
     GHashTable *table;
@@ -249,6 +413,7 @@ static void _init_protocol_table (HazeConnectionManagerClass *klass)
         info->prpl_id = i->prpl_id;
         info->tp_protocol_name = i->tp_protocol_name;
         info->prpl_info = PURPLE_PLUGIN_PROTOCOL_INFO (plugin);
+        info->parameter_map = i->parameter_map;
 
         g_hash_table_insert (table, info->tp_protocol_name, info);
     }
@@ -272,27 +437,9 @@ static void _init_protocol_table (HazeConnectionManagerClass *klass)
             info->tp_protocol_name = p_info->id;
         }
         info->prpl_info = prpl_info;
+        info->parameter_map = "";
 
         g_hash_table_insert (table, info->tp_protocol_name, info);
-    }
-
-    {
-        GList *protocols = haze_g_hash_table_get_values (table);
-        GList *l;
-        GString *debug_string = g_string_new ("");
-
-        for (l = protocols; l; l = l->next)
-        {
-            info = l->data;
-            g_string_append (debug_string, info->tp_protocol_name);
-            if (l->next)
-                g_string_append (debug_string, ", ");
-        }
-
-        DEBUG ("Found protocols %s", debug_string->str);
-
-        g_list_free (protocols);
-        g_string_free (debug_string, TRUE);
     }
 
     klass->protocol_info_table = table;
