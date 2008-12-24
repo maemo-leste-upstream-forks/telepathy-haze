@@ -1,7 +1,17 @@
-bin_PROGRAMS = telepathy-haze
+libexec_PROGRAMS = telepathy-haze
+
+man_MANS = telepathy-haze.8
+
+%.8: %.8.in Makefile
+	sed -e 's,[@]libexecdir[@],@libexecdir@,' < $< > $@
+
+EXTRA_DIST = telepathy-haze.8.in
+CLEANFILES = $(man_MANS)
 
 telepathy_haze_SOURCES = main.c \
                          defines.h \
+                         debug.c \
+                         debug.h \
                          connection-manager.c \
                          connection-manager.h \
                          connection-aliasing.c \
@@ -21,5 +31,9 @@ telepathy_haze_SOURCES = main.c \
                          im-channel-factory.c \
                          im-channel-factory.h
 
-AM_CFLAGS = @PURPLE_CFLAGS@ @TP_GLIB_CFLAGS@ -Wall -Werror
+AM_CFLAGS = \
+	$(ERROR_CFLAGS) \
+	@PURPLE_CFLAGS@ \
+	@TP_GLIB_CFLAGS@
+
 AM_LDFLAGS = @PURPLE_LIBS@ @TP_GLIB_LIBS@

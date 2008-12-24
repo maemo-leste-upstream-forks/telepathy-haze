@@ -1,6 +1,7 @@
 /*
  * connection-avatars.c - Avatars interface implementation of HazeConnection
  * Copyright (C) 2007 Will Thompson
+ * Copyright (C) 2007 Collabora Ltd.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -20,10 +21,11 @@
 
 #include <telepathy-glib/svc-connection.h>
 
-#include <cipher.h>
+#include <libpurple/cipher.h>
 
 #include "connection-avatars.h"
 #include "connection.h"
+#include "debug.h"
 
 void
 haze_connection_get_avatar_requirements (TpSvcConnectionInterfaceAvatars *self,
@@ -194,14 +196,14 @@ haze_connection_request_avatar (TpSvcConnectionInterfaceAvatars *self,
     avatar = get_avatar (conn, contact);
     if (avatar)
     {
-        g_debug ("returning avatar for %u, length %u", contact, avatar->len);
+        DEBUG ("returning avatar for %u, length %u", contact, avatar->len);
         tp_svc_connection_interface_avatars_return_from_request_avatar (
             context, avatar, "" /* no way to get MIME type from purple */);
         g_array_free (avatar, TRUE);
     }
     else
     {
-        g_debug ("handle %u has no avatar", contact);
+        DEBUG ("handle %u has no avatar", contact);
         gchar *message = g_strdup_printf ("handle %u has no avatar", contact);
         g_set_error (&error, TP_ERRORS, TP_ERROR_NOT_AVAILABLE, message);
 
@@ -297,7 +299,7 @@ buddy_icon_changed_cb (PurpleBuddy *buddy, gpointer unused)
 
     gchar *token = get_handle_token (conn, contact);
 
-    g_debug ("buddy_icon_changed_cb: %s '%s'", bname, token);
+    DEBUG ("%s '%s'", bname, token);
 
     tp_svc_connection_interface_avatars_emit_avatar_updated (conn, contact,
         token);

@@ -1,6 +1,7 @@
 /*
  * connection.c - HazeConnection source
  * Copyright (C) 2007 Will Thompson
+ * Copyright (C) 2007 Collabora Ltd.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,9 +26,10 @@
 #include <telepathy-glib/interfaces.h>
 #include <telepathy-glib/errors.h>
 
-#include <accountopt.h>
-#include <version.h>
+#include <libpurple/accountopt.h>
+#include <libpurple/version.h>
 
+#include "debug.h"
 #include "defines.h"
 #include "connection-manager.h"
 #include "connection.h"
@@ -91,13 +93,77 @@ connected_cb (PurpleConnection *pc)
         TP_CONNECTION_STATUS_REASON_NONE_SPECIFIED);
 }
 
+#if PURPLE_VERSION_CHECK(2,3,0)
 static void
-report_disconnect_cb (PurpleConnection *gc,
-                      const char *text)
+haze_report_disconnect_reason (PurpleConnection *gc,
+                               PurpleConnectionError reason,
+                               const char *text)
 {
-    /* FIXME: Actually report the reason to tp_base_connection_change_status */
-    g_debug ("report_disconnect_cb: %s", text);
+    PurpleAccount *account = purple_connection_get_account (gc);
+    TpBaseConnection *base_conn = ACCOUNT_GET_TP_BASE_CONNECTION (account);
+
+    TpConnectionStatusReason tp_reason;
+
+    switch (reason)
+    {
+        case PURPLE_CONNECTION_ERROR_NETWORK_ERROR:
+        /* TODO: this isn't the right mapping.  should this map to
+         *       NoneSpecified?
+         */
+        case PURPLE_CONNECTION_ERROR_OTHER_ERROR:
+            tp_reason = TP_CONNECTION_STATUS_REASON_NETWORK_ERROR;
+            break;
+        case PURPLE_CONNECTION_ERROR_AUTHENTICATION_FAILED:
+        case PURPLE_CONNECTION_ERROR_INVALID_USERNAME:
+        /* TODO: the following don't really match the tp reason but it's
+         *       the nearest match.  Invalid settings shouldn't exist in the
+         *       first place.
+         */
+        case PURPLE_CONNECTION_ERROR_AUTHENTICATION_IMPOSSIBLE:
+        case PURPLE_CONNECTION_ERROR_INVALID_SETTINGS:
+            tp_reason = TP_CONNECTION_STATUS_REASON_AUTHENTICATION_FAILED;
+            break;
+        case PURPLE_CONNECTION_ERROR_NO_SSL_SUPPORT:
+        case PURPLE_CONNECTION_ERROR_ENCRYPTION_ERROR:
+            tp_reason = TP_CONNECTION_STATUS_REASON_ENCRYPTION_ERROR;
+            break;
+        case PURPLE_CONNECTION_ERROR_NAME_IN_USE:
+            tp_reason = TP_CONNECTION_STATUS_REASON_NAME_IN_USE;
+            break;
+        case PURPLE_CONNECTION_ERROR_CERT_NOT_PROVIDED:
+            tp_reason = TP_CONNECTION_STATUS_REASON_CERT_NOT_PROVIDED;
+            break;
+        case PURPLE_CONNECTION_ERROR_CERT_UNTRUSTED:
+            tp_reason = TP_CONNECTION_STATUS_REASON_CERT_UNTRUSTED;
+            break;
+        case PURPLE_CONNECTION_ERROR_CERT_EXPIRED:
+            tp_reason = TP_CONNECTION_STATUS_REASON_CERT_EXPIRED;
+            break;
+        case PURPLE_CONNECTION_ERROR_CERT_NOT_ACTIVATED:
+            tp_reason = TP_CONNECTION_STATUS_REASON_CERT_NOT_ACTIVATED;
+            break;
+        case PURPLE_CONNECTION_ERROR_CERT_HOSTNAME_MISMATCH:
+            tp_reason = TP_CONNECTION_STATUS_REASON_CERT_HOSTNAME_MISMATCH;
+            break;
+        case PURPLE_CONNECTION_ERROR_CERT_FINGERPRINT_MISMATCH:
+            tp_reason = TP_CONNECTION_STATUS_REASON_CERT_FINGERPRINT_MISMATCH;
+            break;
+        case PURPLE_CONNECTION_ERROR_CERT_SELF_SIGNED:
+            tp_reason = TP_CONNECTION_STATUS_REASON_CERT_SELF_SIGNED;
+            break;
+        case PURPLE_CONNECTION_ERROR_CERT_OTHER_ERROR:
+            tp_reason = TP_CONNECTION_STATUS_REASON_CERT_OTHER_ERROR;
+            break;
+        default:
+            g_warning ("report_disconnect_cb: "
+                       "invalid PurpleDisconnectReason %u", reason);
+            tp_reason = TP_CONNECTION_STATUS_REASON_NONE_SPECIFIED;
+    }
+
+    tp_base_connection_change_status (base_conn,
+            TP_CONNECTION_STATUS_DISCONNECTED, tp_reason);
 }
+#endif
 
 static gboolean
 idle_disconnected_cb(gpointer data)
@@ -105,7 +171,7 @@ idle_disconnected_cb(gpointer data)
     PurpleAccount *account = (PurpleAccount *) data;
     HazeConnection *conn = ACCOUNT_GET_HAZE_CONNECTION (account);
 
-    g_debug ("deleting account %s", account->username);
+    DEBUG ("deleting account %s", account->username);
     purple_accounts_delete (account);
     tp_base_connection_finish_shutdown (TP_BASE_CONNECTION (conn));
     return FALSE;
@@ -121,7 +187,16 @@ disconnected_cb (PurpleConnection *pc)
     {
         tp_base_connection_change_status (base_conn,
             TP_CONNECTION_STATUS_DISCONNECTED,
-            TP_CONNECTION_STATUS_REASON_NONE_SPECIFIED);
+/* If we have report_disconnect_reason, then if status is not already
+ * DISCONNECTED we know that it was requested.  If not, we have no idea.
+ */
+#if PURPLE_VERSION_CHECK(2,3,0)
+            TP_CONNECTION_STATUS_REASON_REQUESTED
+#else
+            TP_CONNECTION_STATUS_REASON_NONE_SPECIFIED
+#endif
+            );
+
     }
 
     g_idle_add(idle_disconnected_cb, account);
@@ -329,7 +404,7 @@ haze_connection_constructor (GType type,
             G_OBJECT_CLASS (haze_connection_parent_class)->constructor (
                 type, n_construct_properties, construct_params));
 
-    g_debug("Post-construction: (HazeConnection *)%p", self);
+    DEBUG ("Post-construction: (HazeConnection *)%p", self);
 
     _create_account (self);
 
@@ -341,7 +416,7 @@ haze_connection_dispose (GObject *object)
 {
     HazeConnection *self = HAZE_CONNECTION(object);
 
-    g_debug("disposing of (HazeConnection *)%p", self);
+    DEBUG ("disposing of (HazeConnection *)%p", self);
 
     G_OBJECT_CLASS (haze_connection_parent_class)->dispose (object);
 }
@@ -370,10 +445,14 @@ haze_connection_class_init (HazeConnectionClass *klass)
     GParamSpec *param_spec;
     static const gchar *interfaces_always_present[] = {
         TP_IFACE_CONNECTION_INTERFACE_PRESENCE,
-        TP_IFACE_CONNECTION_INTERFACE_ALIASING, /* FIXME: I'm lying */
+        /* TODO: This is a lie.  Not all protocols supported by libpurple
+         *       actually have the concept of a user-settable alias, but
+         *       there's no way for the UI to know (yet).
+         */
+        TP_IFACE_CONNECTION_INTERFACE_ALIASING,
         NULL };
 
-    g_debug("Initializing (HazeConnectionClass *)%p", klass);
+    DEBUG ("Initializing (HazeConnectionClass *)%p", klass);
 
     g_type_class_add_private (klass, sizeof (HazeConnectionPrivate));
     object_class->get_property = haze_connection_get_property;
@@ -437,7 +516,7 @@ haze_connection_class_init (HazeConnectionClass *klass)
 static void
 haze_connection_init (HazeConnection *self)
 {
-    g_debug("Initializing (HazeConnection *)%p", self);
+    DEBUG ("Initializing (HazeConnection *)%p", self);
     self->priv = G_TYPE_INSTANCE_GET_PRIVATE (self, HAZE_TYPE_CONNECTION,
                                               HazeConnectionPrivate);
 
@@ -472,7 +551,7 @@ request_authorize_cb (PurpleAccount *account,
 #endif
 
     /* FIXME: Implement the publish list, then deal with this properly. */
-    g_debug ("[%s] Quietly authorizing presence subscription from '%s'...",
+    DEBUG ("[%s] Quietly authorizing presence subscription from '%s'...",
              account->username, remote_user);
     cb (user_data);
     return NULL;
@@ -506,14 +585,18 @@ connection_ui_ops =
     connected_cb,    /* connected */
     disconnected_cb, /* disconnected */
     NULL,            /* notice */
-    report_disconnect_cb, /* report_disconnect */
+    NULL,            /* report_disconnect */
     NULL,            /* network_connected */
     NULL,            /* network_disconnected */
+#if PURPLE_VERSION_CHECK(2,3,0)
+    haze_report_disconnect_reason, /* report_disconnect_reason */
+#else
+    NULL, /* _purple_reserved0 */
+#endif
 
     NULL, /* _purple_reserved1 */
     NULL, /* _purple_reserved2 */
-    NULL, /* _purple_reserved3 */
-    NULL  /* _purple_reserved4 */
+    NULL  /* _purple_reserved3 */
 };
 
 PurpleConnectionUiOps *

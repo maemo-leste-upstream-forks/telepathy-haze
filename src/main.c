@@ -1,6 +1,7 @@
 /*
  * main.c - entry point and libpurple boilerplate for telepathy-haze
  * Copyright (C) 2007 Will Thompson
+ * Copyright (C) 2007 Collabora Ltd.
  * Portions taken from libpurple/examples/nullclient.c:
  *   Copyright (C) 2007 Sadrul Habib Chowdhury, Sean Egan, Gary Kramlich,
  *                      Mark Doliner, Richard Laager
@@ -28,26 +29,25 @@
 #include <glib.h>
 #include <glib/gstdio.h>
 
-#include <account.h>
-#include <core.h>
-#include <blist.h>
-#include <debug.h>
-#include <version.h>
+#include <libpurple/account.h>
+#include <libpurple/core.h>
+#include <libpurple/blist.h>
+#include <libpurple/version.h>
 #if PURPLE_VERSION_CHECK(2,1,1)
 /* Before 2.1.1, this include failed because dbus-types.h was not installed. */
-#include <dbus-server.h>
+#include <libpurple/dbus-server.h>
 #endif
-#include <eventloop.h>
-#include <prefs.h>
-#include <util.h>
+#include <libpurple/eventloop.h>
+#include <libpurple/prefs.h>
+#include <libpurple/util.h>
 
 #include <telepathy-glib/run.h>
 #include <telepathy-glib/debug.h>
 
+#include "config.h"
 #include "defines.h"
+#include "debug.h"
 #include "connection-manager.h"
-#include "connection.h"
-#include "im-channel-factory.h"
 
 /* Copied verbatim from nullclient, modulo changing whitespace. */
 #define PURPLE_GLIB_READ_COND  (G_IO_IN | G_IO_HUP | G_IO_ERR)
@@ -123,91 +123,14 @@ static PurpleEventLoopUiOps glib_eventloops =
 };
 /*** End of the eventloop functions. ***/
 
+static char *user_dir = NULL;
+
 static void
 haze_ui_init ()
 {
     purple_accounts_set_ui_ops (haze_get_account_ui_ops ());
     purple_conversations_set_ui_ops (haze_get_conv_ui_ops ());
     purple_connections_set_ui_ops (haze_get_connection_ui_ops ());
-}
-
-static char *debug_level_names[] =
-{
-    "all",
-    "misc",
-    "info",
-    "warning",
-    "error",
-    "fatal"
-};
-
-static void
-haze_debug_print (PurpleDebugLevel level,
-                  const char *category,
-                  const char *arg_s)
-{
-    char *argh = g_strchomp (g_strdup (arg_s));
-    const char *level_name = debug_level_names[level];
-    switch (level)
-    {
-        case PURPLE_DEBUG_WARNING:
-            g_warning ("%s: %s", category, argh);
-            break;
-        case PURPLE_DEBUG_FATAL:
-            /* g_critical doesn't cause an abort() in haze, so libpurple will
-             * still get to do the honours of blowing us out of the water.
-             */
-            g_critical ("[%s] %s: %s", level_name, category, argh);
-            break;
-        case PURPLE_DEBUG_ERROR:
-        case PURPLE_DEBUG_MISC:
-        case PURPLE_DEBUG_INFO:
-        default:
-            g_message ("[%s] %s: %s", level_name, category, argh);
-            break;
-    }
-    g_free(argh);
-}
-
-static gboolean
-haze_debug_is_enabled (PurpleDebugLevel level,
-                       const char *category)
-{
-    if (level == PURPLE_DEBUG_MISC)
-        return FALSE;
-    /* oscar and yahoo, among others, supply a NULL category for some of their
-     * output.  "yay"
-     */
-    if (!category)
-        return FALSE;
-    /* The Jabber prpl produces an unreasonable volume of debug output, so
-     * let's suppress it.
-     */
-    if (!strcmp (category, "jabber"))
-        return FALSE;
-    if (!strcmp (category, "dns") ||
-        !strcmp (category, "dnsquery") ||
-        !strcmp (category, "proxy") ||
-        !strcmp (category, "gnutls"))
-        return FALSE;
-    return TRUE;
-}
-
-static PurpleDebugUiOps haze_debug_uiops =
-{
-    haze_debug_print,
-    haze_debug_is_enabled,
-    /* padding */
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-};
-
-static void
-haze_debug_init()
-{
-    purple_debug_set_ui_ops(&haze_debug_uiops);
 }
 
 static PurpleCoreUiOps haze_core_uiops = 
@@ -227,7 +150,7 @@ static PurpleCoreUiOps haze_core_uiops =
 static void
 init_libpurple()
 {
-    char *user_dir = g_strconcat (g_get_tmp_dir (), G_DIR_SEPARATOR_S,
+    user_dir = g_strconcat (g_get_tmp_dir (), G_DIR_SEPARATOR_S,
                                   "haze-XXXXXX", NULL);
 
     if (!mkdtemp (user_dir)) {
@@ -236,11 +159,6 @@ init_libpurple()
     }
 
     purple_util_set_user_dir (user_dir);
-
-    /* Disable spewing debug information directly to the terminal.  The debug
-     * uiops deal with it.
-     */
-    purple_debug_set_enabled(FALSE);
 
     purple_core_set_ui_ops(&haze_core_uiops);
 
@@ -300,7 +218,7 @@ delete_directory (const char *path)
         }
         else
         {
-            g_debug ("deleting %s", child_full_path);
+            DEBUG ("deleting %s", child_full_path);
             if (g_unlink (child_full_path))
                 ret = FALSE;
         }
@@ -311,7 +229,7 @@ delete_directory (const char *path)
 
     if (ret)
     {
-        g_debug ("deleting %s", path);
+        DEBUG ("deleting %s", path);
         ret = !g_rmdir (path);
     }
 
@@ -321,9 +239,9 @@ delete_directory (const char *path)
 static void
 delete_user_dir (void)
 {
-    const char *user_dir = purple_user_dir ();
     if (!delete_directory (user_dir))
         g_warning ("couldn't delete %s", user_dir);
+    g_free (user_dir);
 }
 
 int
@@ -336,10 +254,26 @@ main(int argc,
 
     signal (SIGCHLD, SIG_IGN);
     init_libpurple();
-    g_debug("libpurple initialized.");
 
+#ifdef HAVE_TP_DEBUG_SET_FLAGS
+    tp_debug_set_flags (g_getenv ("HAZE_DEBUG"));
+#else
     tp_debug_set_flags_from_env ("HAZE_DEBUG");
-    ret = tp_run_connection_manager (UI_ID, HAZE_VERSION, get_cm, argc, argv);
+#endif
+
+    if (g_getenv ("HAZE_PERSIST"))
+    {
+#ifdef HAVE_TP_DEBUG_SET_FLAGS
+      /* tp-glib >= 0.6.1: persist is no longer a flag in quite the same way */
+      tp_debug_set_persistent (TRUE);
+#else
+      /* tp-glib < 0.6.1: persist is a flag, of sorts */
+      tp_debug_set_flags_from_string ("persist");
+#endif
+    }
+
+    ret = tp_run_connection_manager (UI_ID, PACKAGE_VERSION, get_cm, argc,
+                                     argv);
 
     purple_core_quit ();
     delete_user_dir ();

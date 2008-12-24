@@ -1,6 +1,7 @@
 /*
  * im-channel-factory.c - HazeImChannelFactory source
  * Copyright (C) 2007 Will Thompson
+ * Copyright (C) 2007 Collabora Ltd.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,8 +26,8 @@
 #include <telepathy-glib/handle-repo.h>
 #include <telepathy-glib/base-connection.h>
 
+#include "debug.h"
 #include "im-channel.h"
-
 #include "im-channel-factory.h"
 #include "connection.h"
 
@@ -80,7 +81,7 @@ conversation_updated_cb (PurpleConversation *conv,
 
     if (conv->type != PURPLE_CONV_TYPE_IM)
     {
-        g_debug ("typing state update for a non-IM chat, ignoring");
+        DEBUG ("typing state update for a non-IM chat, ignoring");
         return;
     }
 
@@ -220,7 +221,7 @@ im_channel_closed_cb (HazeIMChannel *chan, gpointer user_data)
     {
         g_object_get (chan, "handle", &contact_handle, NULL);
 
-        g_debug ("removing channel with handle %d", contact_handle);
+        DEBUG ("removing channel with handle %d", contact_handle);
 
         g_hash_table_remove (priv->channels, GINT_TO_POINTER (contact_handle));
     }
@@ -250,7 +251,7 @@ new_im_channel (HazeImChannelFactory *self,
                          "handle", handle,
                          NULL);
 
-    g_debug ("Created IM channel with object path %s", object_path);
+    DEBUG ("Created IM channel with object path %s", object_path);
 
     g_signal_connect (chan, "closed", G_CALLBACK (im_channel_closed_cb), self);
 
@@ -297,7 +298,7 @@ haze_im_channel_factory_iface_close_all (TpChannelFactoryIface *iface)
         HAZE_IM_CHANNEL_FACTORY_GET_PRIVATE (fac);
     GHashTable *tmp;
 
-    g_debug ("closing im channels");
+    DEBUG ("closing im channels");
 
     if (priv->channels)
     {
@@ -422,9 +423,6 @@ haze_write_im (PurpleConversation *conv,
 
     HazeConversationUiData *ui_data = PURPLE_CONV_GET_HAZE_UI_DATA (conv);
 
-    if (flags & PURPLE_MESSAGE_SEND)
-        return; /* outgoing message; we deal with these elsewhere */
-
     message = purple_markup_strip_html (xhtml_message);
 
     if (flags & PURPLE_MESSAGE_AUTO_RESP)
@@ -434,9 +432,45 @@ haze_write_im (PurpleConversation *conv,
 
     chan = get_im_channel (im_factory, ui_data->contact_handle, NULL);
 
-    tp_text_mixin_receive (G_OBJECT (chan), type, ui_data->contact_handle,
-                           mtime, message);
+    if (flags & PURPLE_MESSAGE_RECV)
+        tp_text_mixin_receive (G_OBJECT (chan), type, ui_data->contact_handle,
+                               mtime, message);
+    else if (flags & PURPLE_MESSAGE_SEND)
+        tp_svc_channel_type_text_emit_sent (chan, mtime, type, message);
+    else if (flags & PURPLE_MESSAGE_ERROR)
+        /* This is wrong.  The mtime, type and message are of the error message
+         * (such as "Unable to send message: The message is too large.") not of
+         * the message causing the error, and the ChannelTextSendError parameter
+         * shouldn't always be unknown.  But this is the best that can be done
+         * until I fix libpurple.
+         */
+        tp_svc_channel_type_text_emit_send_error (chan,
+            TP_CHANNEL_TEXT_SEND_ERROR_UNKNOWN, mtime, type, message);
+    else
+        DEBUG ("channel %u: ignoring message %s with flags %u",
+            ui_data->contact_handle, message, flags);
+
     g_free (message);
+}
+
+static void
+haze_write_conv (PurpleConversation *conv,
+                 const char *name,
+                 const char *alias,
+                 const char *message,
+                 PurpleMessageFlags flags,
+                 time_t mtime)
+{
+    PurpleConversationType type = purple_conversation_get_type (conv);
+    switch (type)
+    {
+        case PURPLE_CONV_TYPE_IM:
+            haze_write_im (conv, name, message, flags, mtime);
+            break;
+        default:
+            DEBUG ("ignoring message to conv type %u (flags=%u; message=%s)",
+                type, flags, message);
+    }
 }
 
 static void
@@ -456,11 +490,11 @@ haze_create_conversation (PurpleConversation *conv)
 
     HazeConversationUiData *ui_data;
 
-    g_debug ("(PurpleConversation *)%p created", conv);
+    DEBUG ("(PurpleConversation *)%p created", conv);
 
     if (conv->type != PURPLE_CONV_TYPE_IM)
     {
-        g_debug ("not an IM conversation; ignoring");
+        DEBUG ("not an IM conversation; ignoring");
         return;
     }
 
@@ -487,10 +521,10 @@ haze_destroy_conversation (PurpleConversation *conv)
 
     HazeConversationUiData *ui_data;
 
-    g_debug ("(PurpleConversation *)%p destroyed", conv);
+    DEBUG ("(PurpleConversation *)%p destroyed", conv);
     if (conv->type != PURPLE_CONV_TYPE_IM)
     {
-        g_debug ("not an IM conversation; ignoring");
+        DEBUG ("not an IM conversation; ignoring");
         return;
     }
 
@@ -511,7 +545,7 @@ conversation_ui_ops =
     haze_destroy_conversation, /* destroy_conversation */
     NULL,                      /* write_chat */
     haze_write_im,             /* write_im */
-    NULL,                      /* write_conv */
+    haze_write_conv,           /* write_conv */
     NULL,                      /* chat_add_users */
     NULL,                      /* chat_rename_user */
     NULL,                      /* chat_remove_users */
