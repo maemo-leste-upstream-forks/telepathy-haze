@@ -469,12 +469,23 @@ buddy_removed_cb (PurpleBuddy *buddy, gpointer unused)
     tp_handle_set_destroy (rem_handles);
 }
 
+
+/* Objects needed or populated while iterating across the purple buddy list at
+ * login.
+ */
 typedef struct _HandleContext {
     TpHandleRepoIface *contact_repo;
     TpHandleSet *add_handles;
+
+    /* Map from group names (const char *) to (TpIntSet *)s of handles */
     GHashTable *group_handles;
 } HandleContext;
 
+
+/* Called for each buddy on the purple buddy list at login.  Adds them to the
+ * handle set that will become the 'subscribe' list, and to the handle set
+ * which will become their group's channel.
+ */
 static void
 _initial_buddies_foreach (PurpleBuddy *buddy,
                           HandleContext *context)
@@ -501,6 +512,10 @@ _initial_buddies_foreach (PurpleBuddy *buddy,
 
 }
 
+
+/* Creates a group channel on contact_list called group_name, containing the
+ * supplied handles.  Called while traversing the buddy list at login.
+ */
 gboolean
 _create_initial_group(gchar *group_name,
                       TpIntSet *handles,
@@ -521,23 +536,28 @@ _create_initial_group(gchar *group_name,
 
     tp_handle_unref (handle_repo, group_handle); /* reffed by group */
 
+    /* Remove this group from the hash of groups to be constructed. */
     return TRUE;
 }
 
+
+/* Iterates across all buddies on a purple account's buddy list at login,
+ * adding them to subscribe.
+ */
 static void
-_add_initial_buddies (HazeContactList *self)
+_add_initial_buddies (HazeContactList *self,
+                      HazeContactListChannel *subscribe)
 {
     HazeContactListPrivate *priv = HAZE_CONTACT_LIST_GET_PRIVATE (self);
-    HazeContactListChannel *subscribe;
 
     PurpleAccount *account = priv->conn->account;
-
     GSList *buddies = purple_find_buddies(account, NULL);
+
     TpBaseConnection *base_conn = TP_BASE_CONNECTION (priv->conn);
     TpHandleRepoIface *contact_repo = tp_base_connection_get_handles (base_conn,
         TP_HANDLE_TYPE_CONTACT);
+
     TpHandleSet *add_handles = tp_handle_set_new (contact_repo);
-    /* Map from group names (const char *) to (TpIntSet *)s of handles */
     GHashTable *group_handles = g_hash_table_new_full (NULL, NULL, NULL,
         (GDestroyNotify) tp_intset_destroy);
     HandleContext context = { contact_repo, add_handles, group_handles };
@@ -545,14 +565,12 @@ _add_initial_buddies (HazeContactList *self)
     g_slist_foreach (buddies, (GFunc) _initial_buddies_foreach, &context);
     g_slist_free (buddies);
 
-    subscribe = haze_contact_list_get_channel (self, TP_HANDLE_TYPE_LIST,
-            HAZE_LIST_HANDLE_SUBSCRIBE, NULL /*created*/);
-
     tp_group_mixin_change_members (G_OBJECT (subscribe), "",
         tp_handle_set_peek (add_handles), NULL, NULL, NULL, 0, 0);
 
     g_hash_table_foreach_remove (group_handles, (GHRFunc) _create_initial_group,
         self);
+    g_hash_table_destroy (group_handles);
 
     tp_handle_set_destroy (add_handles);
 }
@@ -561,9 +579,18 @@ static void
 haze_contact_list_factory_iface_connected (TpChannelFactoryIface *iface)
 {
     HazeContactList *self = HAZE_CONTACT_LIST (iface);
+    HazeContactListChannel *subscribe, *publish;
 
-    _add_initial_buddies (self);
+    /* Ensure contact lists exist before going any further. */
+    subscribe = haze_contact_list_get_channel (self, TP_HANDLE_TYPE_LIST,
+        HAZE_LIST_HANDLE_SUBSCRIBE, NULL /*created*/);
+    g_assert (subscribe != NULL);
 
+    publish = haze_contact_list_get_channel (self, TP_HANDLE_TYPE_LIST,
+            HAZE_LIST_HANDLE_PUBLISH, NULL /*created*/);
+    g_assert (publish != NULL);
+
+    _add_initial_buddies (self, subscribe);
 }
 
 static void

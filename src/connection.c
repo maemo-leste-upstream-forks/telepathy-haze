@@ -36,6 +36,7 @@
 #include "connection-presence.h"
 #include "connection-aliasing.h"
 #include "connection-avatars.h"
+#include "contact-list-channel.h"
 
 enum
 {
@@ -62,7 +63,12 @@ typedef struct _HazeConnectionPrivate
 
     HazeProtocolInfo *protocol_info;
 
-    gboolean dispose_has_run;
+    /* Set if purple_account_disconnect has been called or is scheduled to be
+     * called, so should not be called again.
+     */
+    gboolean disconnecting : 1;
+
+    gboolean dispose_has_run : 1;
 } HazeConnectionPrivate;
 
 #define HAZE_CONNECTION_GET_PRIVATE(o) \
@@ -114,9 +120,16 @@ haze_report_disconnect_reason (PurpleConnection *gc,
                                const char *text)
 {
     PurpleAccount *account = purple_connection_get_account (gc);
+    HazeConnection *conn = ACCOUNT_GET_HAZE_CONNECTION (account);
+    HazeConnectionPrivate *priv = HAZE_CONNECTION_GET_PRIVATE (conn);
     TpBaseConnection *base_conn = ACCOUNT_GET_TP_BASE_CONNECTION (account);
 
     TpConnectionStatusReason tp_reason;
+
+    /* When a connection error is reported by libpurple, an idle callback to
+     * purple_account_disconnect is added.
+     */
+    priv->disconnecting = TRUE;
 
     switch (reason)
     {
@@ -195,7 +208,11 @@ void
 disconnected_cb (PurpleConnection *pc)
 {
     PurpleAccount *account = purple_connection_get_account (pc);
+    HazeConnection *conn = ACCOUNT_GET_HAZE_CONNECTION (account);
+    HazeConnectionPrivate *priv = HAZE_CONNECTION_GET_PRIVATE (conn);
     TpBaseConnection *base_conn = ACCOUNT_GET_TP_BASE_CONNECTION (account);
+
+    priv->disconnecting = TRUE;
 
     if(base_conn->status != TP_CONNECTION_STATUS_DISCONNECTED)
     {
@@ -251,6 +268,7 @@ _set_option (const PurpleAccountOption *option,
                 g_value_get_int (value));
             break;
         case PURPLE_PREF_STRING:
+        case PURPLE_PREF_STRING_LIST:
             g_assert (G_VALUE_TYPE (value) == G_TYPE_STRING);
             purple_account_set_string (context->account, option->pref_name,
                 g_value_get_string (value));
@@ -325,16 +343,20 @@ static void
 _haze_connection_shut_down (TpBaseConnection *base)
 {
     HazeConnection *self = HAZE_CONNECTION(base);
-    if(!self->account->disconnecting)
+    HazeConnectionPrivate *priv = HAZE_CONNECTION_GET_PRIVATE (self);
+    if(!priv->disconnecting)
+    {
+        priv->disconnecting = TRUE;
         purple_account_disconnect(self->account);
+    }
 }
 
 /* Must be in the same order as HazeListHandle in connection.h */
 static const char *list_handle_strings[] =
 {
     "subscribe",    /* HAZE_LIST_HANDLE_SUBSCRIBE */
-#if 0
     "publish",      /* HAZE_LIST_HANDLE_PUBLISH */
+#if 0
     "hide",         /* HAZE_LIST_HANDLE_HIDE */
     "allow",        /* HAZE_LIST_HANDLE_ALLOW */
     "deny"          /* HAZE_LIST_HANDLE_DENY */
@@ -451,6 +473,8 @@ haze_connection_constructor (GType type,
 
     priv->dispose_has_run = FALSE;
 
+    priv->disconnecting = FALSE;
+
     _create_account (self);
 
     return (GObject *)self;
@@ -552,37 +576,14 @@ haze_connection_init (HazeConnection *self)
     haze_connection_presence_init (self);
 }
 
-/* Without the ifdef check, this compiles with warnings.  Except I want
- * -Werror, so...
- */
-static void *
-request_authorize_cb (PurpleAccount *account,
-                      const char *remote_user,
-                      const char *id,
-                      const char *alias,
-                      const char *message,
-                      gboolean on_list,
-                      PurpleAccountRequestAuthorizationCb authorize_cb,
-                      PurpleAccountRequestAuthorizationCb deny_cb,
-                      void *user_data)
-{
-    /* Woo for argument lists which are longer than the function! */
-
-    /* FIXME: Implement the publish list, then deal with this properly. */
-    DEBUG ("[%s] Quietly authorizing presence subscription from '%s'...",
-             account->username, remote_user);
-    authorize_cb (user_data);
-    return NULL;
-}
-
 static PurpleAccountUiOps
 account_ui_ops =
 {
     NULL,                                            /* notify_added */
     haze_connection_presence_account_status_changed, /* status_changed */
     NULL,                                            /* request_add */
-    request_authorize_cb,                            /* request_authorize */
-    NULL,                                            /* close_account_request */
+    haze_request_authorize,                          /* request_authorize */
+    haze_close_account_request,                      /* close_account_request */
 
     NULL, /* purple_reserved1 */
     NULL, /* purple_reserved2 */

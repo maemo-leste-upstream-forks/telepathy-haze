@@ -50,7 +50,6 @@ extern const guint purple_micro_version;
 #endif
 
 #include <telepathy-glib/run.h>
-#include <telepathy-glib/debug.h>
 
 #include "defines.h"
 #include "debug.h"
@@ -161,7 +160,21 @@ static PurpleCoreUiOps haze_core_uiops =
 };
 
 static void
-init_libpurple()
+set_libpurple_preferences (void)
+{
+    /* Out of the box, libpurple tracks your idle time based on when you last
+     * sent a message or similar, and auto-aways you after 5 minutes of
+     * inactivity, and sends auto-reply messages on protocols that have such a
+     * concept natively when you're away.  Let's disable all that.
+     */
+    purple_prefs_set_string ("/purple/away/idle_reporting", "none");
+    purple_prefs_set_bool ("/purple/away/away_when_idle", FALSE);
+    purple_prefs_set_string ("/purple/away/auto_reply", "never");
+
+}
+
+static void
+init_libpurple (void)
 {
     user_dir = g_strconcat (g_get_tmp_dir (), G_DIR_SEPARATOR_S,
                                   "haze-XXXXXX", NULL);
@@ -195,6 +208,8 @@ init_libpurple()
     DEBUG ("libpurple %d.%d.%d loaded (compiled against %d.%d.%d)",
         purple_major_version, purple_minor_version, purple_micro_version,
         PURPLE_MAJOR_VERSION, PURPLE_MINOR_VERSION, PURPLE_MICRO_VERSION);
+
+    set_libpurple_preferences ();
 }
 
 static TpBaseConnectionManager *
@@ -269,25 +284,10 @@ main(int argc,
 
     g_set_prgname(UI_ID);
 
+    haze_debug_set_flags_from_env ();
+
     signal (SIGCHLD, SIG_IGN);
     init_libpurple();
-
-#ifdef HAVE_TP_DEBUG_SET_FLAGS
-    tp_debug_set_flags (g_getenv ("HAZE_DEBUG"));
-#else
-    tp_debug_set_flags_from_env ("HAZE_DEBUG");
-#endif
-
-    if (g_getenv ("HAZE_PERSIST"))
-    {
-#ifdef HAVE_TP_DEBUG_SET_FLAGS
-      /* tp-glib >= 0.6.1: persist is no longer a flag in quite the same way */
-      tp_debug_set_persistent (TRUE);
-#else
-      /* tp-glib < 0.6.1: persist is a flag, of sorts */
-      tp_debug_set_flags_from_string ("persist");
-#endif
-    }
 
     ret = tp_run_connection_manager (UI_ID, PACKAGE_VERSION, get_cm, argc,
                                      argv);

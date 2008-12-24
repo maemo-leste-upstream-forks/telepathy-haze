@@ -24,6 +24,39 @@
 
 #include "contact-list-channel.h"
 #include "connection.h"
+#include "debug.h"
+
+
+typedef struct _PublishRequestData PublishRequestData;
+
+/** PublishRequestData:
+ *
+ *  Keeps track of the relevant callbacks to approve or deny a contact's publish
+ *  request.
+ */
+struct _PublishRequestData {
+    HazeContactListChannel *publish;
+    TpHandle handle;
+
+    PurpleAccountRequestAuthorizationCb allow;
+    PurpleAccountRequestAuthorizationCb deny;
+    gpointer data;
+};
+
+
+static PublishRequestData *
+publish_request_data_new ()
+{
+    return g_slice_new0 (PublishRequestData);
+}
+
+static void
+publish_request_data_free (PublishRequestData *prd)
+{
+    g_object_unref (prd->publish);
+    g_slice_free (PublishRequestData, prd);
+}
+
 
 typedef struct _HazeContactListChannelPrivate HazeContactListChannelPrivate;
 struct _HazeContactListChannelPrivate {
@@ -33,7 +66,17 @@ struct _HazeContactListChannelPrivate {
     TpHandle handle;
     guint handle_type;
 
+    /* Defined only if handle_type == TP_HANDLE_TYPE_GROUP; NULL otherwise.
+     */
     PurpleGroup *group;
+
+    /* Maps TpHandle to PublishRequestData, corresponding to the handles on
+     * local_pending.
+     *
+     * Defined only if handle_type == TP_HANDLE_TYPE_LIST && handle =
+     * HAZE_LIST_HANDLE_PUBLISH; NULL otherwise.
+     */
+    GHashTable *pending_publish_requests;
 
     gboolean closed;
     gboolean dispose_has_run;
@@ -65,6 +108,31 @@ enum {
     LAST_PROPERTY
 };
 
+
+/* Removes the PublishRequestData for the given handle, from the
+ * pending_publish_requests table, dropping its reference to that handle.
+ */
+static void
+remove_pending_publish_request (HazeContactListChannel *publish,
+                                TpHandle handle)
+{
+    HazeContactListChannelPrivate *priv =
+        HAZE_CONTACT_LIST_CHANNEL_GET_PRIVATE (publish);
+    HazeConnection *conn = priv->conn;
+    TpBaseConnection *base_conn = TP_BASE_CONNECTION (conn);
+    TpHandleRepoIface *handle_repo =
+        tp_base_connection_get_handles (base_conn, TP_HANDLE_TYPE_CONTACT);
+
+    gpointer h = GUINT_TO_POINTER (handle);
+    gboolean removed;
+
+    removed = g_hash_table_remove (priv->pending_publish_requests, h);
+    g_assert (removed);
+
+    tp_handle_unref (handle_repo, handle);
+}
+
+
 static gboolean
 _list_add_member_cb (HazeContactListChannel *chan,
                      TpHandle handle,
@@ -74,6 +142,7 @@ _list_add_member_cb (HazeContactListChannel *chan,
     HazeContactListChannelPrivate *priv =
         HAZE_CONTACT_LIST_CHANNEL_GET_PRIVATE (chan);
     HazeConnection *conn = priv->conn;
+    TpBaseConnection *base_conn = TP_BASE_CONNECTION (conn);
     const gchar *bname =
         haze_connection_handle_inspect (conn, TP_HANDLE_TYPE_CONTACT, handle);
     PurpleBuddy *buddy;
@@ -98,6 +167,27 @@ _list_add_member_cb (HazeContactListChannel *chan,
             purple_account_add_buddy(buddy->account, buddy);
 
             return TRUE; /* FIXME: How am I meant to know if it failed? */
+        case HAZE_LIST_HANDLE_PUBLISH:
+        {
+            gpointer key = GUINT_TO_POINTER (handle);
+            TpIntSet *add = tp_intset_new ();
+            PublishRequestData *request_data =
+                g_hash_table_lookup (priv->pending_publish_requests, key);
+            g_assert (request_data != NULL);
+
+            DEBUG ("allowing publish request for %s", bname);
+            request_data->allow(request_data->data);
+
+            tp_intset_add (add, handle);
+            tp_group_mixin_change_members (G_OBJECT (chan), message, add,
+                NULL, NULL, NULL, base_conn->self_handle,
+                TP_CHANNEL_GROUP_CHANGE_REASON_NONE);
+            tp_intset_destroy (add);
+
+            remove_pending_publish_request (chan, handle);
+
+            return TRUE;
+        }
         default:
             /* TODO: more list types */
             g_assert_not_reached ();
@@ -166,6 +256,7 @@ _list_remove_member_cb (HazeContactListChannel *chan,
         HAZE_CONTACT_LIST_CHANNEL_GET_PRIVATE (chan);
     HazeConnection *conn = priv->conn;
     PurpleAccount *account = conn->account;
+    TpBaseConnection *base_conn = TP_BASE_CONNECTION (conn);
     const gchar *bname =
         haze_connection_handle_inspect (conn, TP_HANDLE_TYPE_CONTACT, handle);
     GSList *buddies, *l;
@@ -201,6 +292,27 @@ _list_remove_member_cb (HazeContactListChannel *chan,
             g_slist_free (buddies);
 
             return TRUE;
+        case HAZE_LIST_HANDLE_PUBLISH:
+        {
+            gpointer key = GUINT_TO_POINTER (handle);
+            TpIntSet *remove = tp_intset_new ();
+            PublishRequestData *request_data =
+                g_hash_table_lookup (priv->pending_publish_requests, key);
+            g_assert (request_data != NULL);
+
+            DEBUG ("denying publish request for %s", bname);
+            request_data->deny(request_data->data);
+
+            tp_intset_add (remove, handle);
+            tp_group_mixin_change_members (G_OBJECT (chan), message, NULL,
+                remove, NULL, NULL, base_conn->self_handle,
+                TP_CHANNEL_GROUP_CHANGE_REASON_NONE);
+            tp_intset_destroy (remove);
+
+            remove_pending_publish_request (chan, handle);
+
+            return TRUE;
+        }
         default:
             /* TODO: More list types */
             g_assert_not_reached ();
@@ -264,6 +376,91 @@ _haze_contact_list_channel_remove_member_cb (GObject *obj,
             return FALSE;
     }
 }
+
+
+gpointer
+haze_request_authorize (PurpleAccount *account,
+                        const char *remote_user,
+                        const char *id,
+                        const char *alias,
+                        const char *message,
+                        gboolean on_list,
+                        PurpleAccountRequestAuthorizationCb authorize_cb,
+                        PurpleAccountRequestAuthorizationCb deny_cb,
+                        void *user_data)
+{
+    HazeConnection *conn = account->ui_data;
+    TpBaseConnection *base_conn = TP_BASE_CONNECTION (conn);
+    TpHandleRepoIface *contact_repo = tp_base_connection_get_handles (base_conn,
+        TP_HANDLE_TYPE_CONTACT);
+
+    HazeContactListChannel *publish =
+        haze_contact_list_get_channel (conn->contact_list,
+            TP_HANDLE_TYPE_LIST, HAZE_LIST_HANDLE_PUBLISH, NULL);
+    HazeContactListChannelPrivate *priv =
+        HAZE_CONTACT_LIST_CHANNEL_GET_PRIVATE (publish);
+
+    TpIntSet *add_local_pending = tp_intset_new ();
+    TpHandle remote_handle;
+    gboolean changed;
+    PublishRequestData *request_data = publish_request_data_new ();
+
+    /* This handle is owned by request_data, and is unreffed in
+     * remove_pending_publish_request.
+     */
+    remote_handle = tp_handle_ensure (contact_repo, remote_user, NULL, NULL);
+    request_data->publish = g_object_ref (publish);
+    request_data->handle = remote_handle;
+    request_data->allow = authorize_cb;
+    request_data->deny = deny_cb;
+    request_data->data = user_data;
+
+    g_hash_table_insert (priv->pending_publish_requests,
+        GUINT_TO_POINTER (remote_handle), request_data);
+
+    tp_intset_add (add_local_pending, remote_handle);
+    changed = tp_group_mixin_change_members (G_OBJECT (publish), message, NULL,
+        NULL, add_local_pending, NULL, remote_handle,
+        TP_CHANNEL_GROUP_CHANGE_REASON_NONE);
+    tp_intset_destroy (add_local_pending);
+
+    return request_data;
+}
+
+
+void
+haze_close_account_request (gpointer request_data_)
+{
+    PublishRequestData *request_data = request_data_;
+
+    /* When 'request_data' is removed from the pending request table, its
+     * reference to 'publish' is dropped.  So, we take our own reference here,
+     * in case the reference in 'request_data' was the last one.  (If we don't,
+     * the channel (including 'pending_publish_requests') is destroyed half-way
+     * through g_hash_table_remove() in remove_pending_publish_request(); cue
+     * stack corruption.)
+     */
+    HazeContactListChannel *publish = g_object_ref (request_data->publish);
+    HazeContactListChannelPrivate *priv =
+        HAZE_CONTACT_LIST_CHANNEL_GET_PRIVATE (publish);
+
+    TpBaseConnection *base_conn = TP_BASE_CONNECTION (priv->conn);
+
+    TpIntSet *remove = tp_intset_new ();
+
+    DEBUG ("cancelling publish request for handle %u", request_data->handle);
+
+    tp_intset_add (remove, request_data->handle);
+    tp_group_mixin_change_members (G_OBJECT (publish), NULL, NULL, remove, NULL,
+        NULL, base_conn->self_handle, TP_CHANNEL_GROUP_CHANGE_REASON_NONE);
+    tp_intset_destroy (remove);
+
+    remove_pending_publish_request (publish, request_data->handle);
+
+    g_object_unref (publish);
+}
+
+
 
 static void
 haze_contact_list_channel_init (HazeContactListChannel *self)
@@ -331,6 +528,20 @@ haze_contact_list_channel_constructor (GType type, guint n_props,
                             TP_CHANNEL_GROUP_FLAG_CAN_RESCIND,
                             0);
                     break;
+                case HAZE_LIST_HANDLE_PUBLISH:
+                    priv->pending_publish_requests =
+                        g_hash_table_new_full (NULL, NULL, NULL,
+                            (GDestroyNotify) publish_request_data_free);
+                    /* This is kind of a fake publish channel: it's only used
+                     * to accept or reject incoming subscription requests.  So,
+                     * you can't add or remove anyone from it yourself; people
+                     * get onto local_pending when they make a subscribe
+                     * request, and then you can move them to the list proper
+                     * or remove them.
+                     *
+                     * So, we'll leave the channel's flags as 0.
+                     */
+                    break;
                 /* TODO: More magic lists go here */
                 default:
                     g_assert_not_reached ();
@@ -361,6 +572,13 @@ haze_contact_list_channel_dispose (GObject *object)
     }
 
     g_free (priv->object_path);
+
+    if (priv->pending_publish_requests)
+    {
+        g_assert (g_hash_table_size (priv->pending_publish_requests) == 0);
+        g_hash_table_destroy (priv->pending_publish_requests);
+        priv->pending_publish_requests = NULL;
+    }
 
     if (G_OBJECT_CLASS (haze_contact_list_channel_parent_class)->dispose)
         G_OBJECT_CLASS (haze_contact_list_channel_parent_class)->dispose (object);

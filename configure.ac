@@ -8,7 +8,7 @@ AC_PREREQ([2.59])
 
 m4_define([haze_major_version], [0])
 m4_define([haze_minor_version], [2])
-m4_define([haze_micro_version], [0])
+m4_define([haze_micro_version], [1])
 m4_define([haze_nano_version], [0])
 
 m4_define([haze_base_version],
@@ -74,9 +74,9 @@ PKG_CHECK_MODULES(TP_GLIB,[telepathy-glib >= 0.7])
 AC_SUBST(TP_GLIB_CFLAGS)
 AC_SUBST(TP_GLIB_LIBS)
 
-AC_CHECK_LIB(telepathy-glib, tp_debug_set_flags,
-  [ AC_DEFINE(HAVE_TP_DEBUG_SET_FLAGS, [],
-    [Define if tp_debug_set_flags() function is provided by telepathy-glib]) ],
+AC_CHECK_LIB(telepathy-glib, tp_debug_divert_messages,
+  [ AC_DEFINE(HAVE_TP_DEBUG_DIVERT_MESSAGES, [],
+    [Define if tp_debug_divert_messages() is provided by telepathy-glib]) ],
   [], [$TP_GLIB_LIBS])
 
 AC_CHECK_LIB(purple, purple_dbus_uninit,
