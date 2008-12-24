@@ -23,6 +23,7 @@
 
 #include <string.h>
 #include <errno.h>
+#include <signal.h>
 
 #include <glib.h>
 #include <glib/gstdio.h>
@@ -317,23 +318,31 @@ delete_directory (const char *path)
     return ret;
 }
 
-int main(int argc, char **argv)
+static void
+delete_user_dir (void)
+{
+    const char *user_dir = purple_user_dir ();
+    if (!delete_directory (user_dir))
+        g_warning ("couldn't delete %s", user_dir);
+}
+
+int
+main(int argc,
+     char **argv)
 {
     int ret = 0;
-    const char *user_dir;
 
     g_set_prgname(UI_ID);
 
+    signal (SIGCHLD, SIG_IGN);
     init_libpurple();
     g_debug("libpurple initialized.");
 
     tp_debug_set_flags_from_env ("HAZE_DEBUG");
-    ret = tp_run_connection_manager(UI_ID, HAZE_VERSION, get_cm, argc, argv);
+    ret = tp_run_connection_manager (UI_ID, HAZE_VERSION, get_cm, argc, argv);
 
-    purple_core_quit();
-    user_dir = purple_user_dir ();
-    if (!delete_directory (user_dir))
-        g_warning ("couldn't delete %s", user_dir);
+    purple_core_quit ();
+    delete_user_dir ();
 
     return ret;
 }
