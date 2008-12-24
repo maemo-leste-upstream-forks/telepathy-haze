@@ -23,3 +23,5 @@ clean::
 DEB_CONFIGURE_LIBEXECDIR := "\$${prefix}/lib/telepathy"
 # but haven't done so yet, so let's give Debian a head start
 DEB_CONFIGURE_EXTRA_FLAGS := --bindir=$(DEB_CONFIGURE_LIBEXECDIR)
+
+include $(CURDIR)/debian/update-patches.mk
