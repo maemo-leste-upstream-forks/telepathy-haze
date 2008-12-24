@@ -8,7 +8,7 @@ AC_PREREQ([2.59])
 
 m4_define([haze_major_version], [0])
 m4_define([haze_minor_version], [1])
-m4_define([haze_micro_version], [3])
+m4_define([haze_micro_version], [4])
 m4_define([haze_nano_version], [0])
 
 m4_define([haze_base_version],
@@ -73,6 +73,11 @@ AC_CHECK_LIB(telepathy-glib, tp_debug_set_flags,
   [ AC_DEFINE(HAVE_TP_DEBUG_SET_FLAGS, [],
     [Define if tp_debug_set_flags() function is provided by telepathy-glib]) ],
   [], [$TP_GLIB_LIBS])
+
+AC_CHECK_LIB(purple, purple_dbus_uninit,
+  [ AC_DEFINE(HAVE_PURPLE_DBUS_UNINIT, [],
+    [Define if purple_dbus_uninit is present in libpurple]) ],
+  [], [$PURPLE_LIBS])
 
 #AS_AC_EXPAND(DATADIR, $datadir)
 #DBUS_SERVICES_DIR="$DATADIR/dbus-1/services"
