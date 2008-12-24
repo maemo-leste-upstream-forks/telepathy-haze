@@ -194,34 +194,61 @@ haze_contact_list_class_init (HazeContactListClass *klass)
                            klass, PURPLE_CALLBACK(buddy_removed_cb), NULL);
 }
 
+static void
+contact_list_channel_closed_cb (HazeContactListChannel *chan,
+                                gpointer user_data)
+{
+    HazeContactList *contact_list = HAZE_CONTACT_LIST (user_data);
+    HazeContactListPrivate *priv = HAZE_CONTACT_LIST_GET_PRIVATE (contact_list);
+    TpHandle handle;
+    guint handle_type;
+    GHashTable *channels;
+
+    g_object_get (chan, "handle", &handle, "handle-type", &handle_type, NULL);
+    g_assert (handle_type == TP_HANDLE_TYPE_LIST ||
+              handle_type == TP_HANDLE_TYPE_GROUP);
+
+    channels = (handle_type == TP_HANDLE_TYPE_GROUP
+        ? priv->group_channels : priv->list_channels);
+
+    if (channels)
+    {
+        g_debug ("removing channel %d:%d", handle_type, handle);
+
+        g_hash_table_remove (channels, GINT_TO_POINTER (handle));
+    }
+}
+
+/**
+ * Instantiates the described channel.  Requires that the channel does
+ * not already exist.
+ */
 static HazeContactListChannel *
 _haze_contact_list_create_channel (HazeContactList *contact_list,
                                    guint handle_type,
                                    TpHandle handle)
 {
     HazeContactListPrivate *priv = HAZE_CONTACT_LIST_GET_PRIVATE(contact_list);
-    TpBaseConnection *conn = TP_BASE_CONNECTION (priv->conn);
-    TpHandleRepoIface *handle_repo =
-        tp_base_connection_get_handles (conn, handle_type);
-    HazeContactListChannel *chan;
-    const char *name;
-    char *mangled_name;
-    char *object_path;
+    TpBaseConnection *base_conn = TP_BASE_CONNECTION (priv->conn);
     GHashTable *channels = (handle_type == TP_HANDLE_TYPE_LIST
                            ? priv->list_channels
                            : priv->group_channels);
 
-    /* if this assertion succeeds, we know we have the right handle repo */
+    HazeContactListChannel *chan;
+    const char *name;
+    char *mangled_name;
+    char *object_path;
+
     g_assert (handle_type == TP_HANDLE_TYPE_LIST ||
             handle_type == TP_HANDLE_TYPE_GROUP);
     g_assert (channels != NULL);
     g_assert (g_hash_table_lookup (channels, GINT_TO_POINTER (handle)) == NULL);
 
-    name = tp_handle_inspect (handle_repo, handle);
+    name = haze_connection_handle_inspect (priv->conn, handle_type, handle);
     g_debug ("Instantiating channel %u:%u \"%s\"", handle_type, handle, name);
     mangled_name = tp_escape_as_identifier (name);
     object_path = g_strdup_printf ("%s/ContactListChannel/%s/%s",
-                                   conn->object_path,
+                                   base_conn->object_path,
                                    handle_type == TP_HANDLE_TYPE_LIST ? "List"
                                                                       : "Group",
                                    mangled_name);
@@ -236,6 +263,9 @@ _haze_contact_list_create_channel (HazeContactList *contact_list,
                          NULL);
 
     g_debug ("created %s", object_path);
+
+    g_signal_connect (chan, "closed",
+        G_CALLBACK (contact_list_channel_closed_cb), contact_list);
 
     g_hash_table_insert (channels, GINT_TO_POINTER (handle), chan);
 
@@ -310,16 +340,19 @@ haze_contact_list_factory_iface_close_all (TpChannelFactoryIface *iface)
 {
     HazeContactList *self = HAZE_CONTACT_LIST (iface);
     HazeContactListPrivate *priv = HAZE_CONTACT_LIST_GET_PRIVATE (self);
+    GHashTable *tmp;
 
     if (priv->list_channels)
     {
-        g_hash_table_destroy (priv->list_channels);
+        tmp = priv->list_channels;
         priv->list_channels = NULL;
+        g_hash_table_destroy (tmp);
     }
     if (priv->group_channels)
     {
-        g_hash_table_destroy (priv->group_channels);
+        tmp = priv->group_channels;
         priv->group_channels = NULL;
+        g_hash_table_destroy (tmp);
     }
 }
 
@@ -582,6 +615,7 @@ haze_contact_list_factory_iface_request (TpChannelFactoryIface *iface,
     TpHandleRepoIface *handle_repo =
         tp_base_connection_get_handles (conn, handle_type);
     HazeContactListChannel *chan;
+    const gchar *channel_name;
     gboolean created;
 
     if (strcmp (chan_type, TP_IFACE_CHANNEL_TYPE_CONTACT_LIST))
@@ -597,8 +631,8 @@ haze_contact_list_factory_iface_request (TpChannelFactoryIface *iface,
     if (!tp_handle_is_valid (handle_repo, handle, NULL))
         return TP_CHANNEL_FACTORY_REQUEST_STATUS_INVALID_HANDLE;
 
-    g_debug ("grabbing channel '%s'...",
-             tp_handle_inspect (handle_repo, handle));
+    channel_name = tp_handle_inspect (handle_repo, handle);
+    g_debug ("grabbing channel '%s'...", channel_name);
     chan = _haze_contact_list_get_channel (self, handle_type, handle,
         &created);
 
@@ -616,8 +650,8 @@ haze_contact_list_factory_iface_request (TpChannelFactoryIface *iface,
     }
     else
     {
-        g_assert_not_reached ();
-        return TP_CHANNEL_FACTORY_REQUEST_STATUS_NOT_AVAILABLE;
+        g_warning ("eh!  why does the channel '%s' not exist?", channel_name);
+        return TP_CHANNEL_FACTORY_REQUEST_STATUS_NOT_IMPLEMENTED;
     }
 }
 
