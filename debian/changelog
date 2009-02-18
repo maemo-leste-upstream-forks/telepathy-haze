@@ -1,10 +1,14 @@
-telepathy-haze (0.2.1-2) UNRELEASED; urgency=low
+telepathy-haze (0.2.1-2) unstable; urgency=low
 
+  [ Simon McVittie ]
   * Move packaging to git
   * Standards-Version: 3.8.0 (add README.source)
   * Use Laurent's debian.org address in Uploaders
 
- -- Simon McVittie <smcv@debian.org>  Wed, 24 Dec 2008 15:17:27 +0000
+  [ Laurent Bigonville ]
+  * Upload to unstable.
+
+ -- Laurent Bigonville <bigon@debian.org>  Wed, 18 Feb 2009 20:23:28 +0100
 
 telepathy-haze (0.2.1-1) experimental; urgency=low
 
