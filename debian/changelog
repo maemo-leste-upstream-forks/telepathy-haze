@@ -6,9 +6,10 @@ telepathy-haze (0.3.0-1) UNRELEASED; urgency=low
     + Removed XS-Dm-Upload-Allowed field.
     + Upped Standards-Version.
     + Upped build-dep version on libtelepathy-glib-dev.
+    + Added libdbus-glib-1-dev build-dep.
   * debian/gbp.conf: Removed no-create-orig line.
 
- -- Jonny Lamb <jonny@debian.org>  Sat, 04 Apr 2009 13:10:43 +0100
+ -- Jonny Lamb <jonny@debian.org>  Sat, 04 Apr 2009 13:12:58 +0100
 
 telepathy-haze (0.2.1-2) unstable; urgency=low
 
