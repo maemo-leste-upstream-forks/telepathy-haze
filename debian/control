@@ -17,7 +17,6 @@ Vcs-Browser: http://git.debian.org/?p=pkg-telepathy/telepathy-haze.git
 
 Package: telepathy-haze
 Architecture: any
-Section: net
 Depends: ${shlibs:Depends},
          ${misc:Depends}
 Provides: telepathy-connection-manager
