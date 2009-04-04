@@ -1,7 +1,7 @@
 /*
  * connection-presence.c - Presence interface implementation of HazeConnection
  * Copyright (C) 2007 Will Thompson
- * Copyright (C) 2007 Collabora Ltd.
+ * Copyright (C) 2007-2008 Collabora Ltd.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,6 +21,8 @@
 
 #include "connection-presence.h"
 #include "debug.h"
+
+#include <telepathy-glib/dbus.h>
 
 static const TpPresenceStatusOptionalArgumentSpec arg_specs[] = {
     { "message", "s" },
@@ -94,8 +96,9 @@ _get_tp_status (PurpleStatus *p_status)
     xhtml_message = purple_status_get_attr_string (p_status, "message");
     if (xhtml_message)
     {
-        message = purple_markup_strip_html (xhtml_message);
         GValue *message_v = g_slice_new0 (GValue);
+
+        message = purple_markup_strip_html (xhtml_message);
         g_value_init (message_v, G_TYPE_STRING);
         g_value_set_string (message_v, message);
         g_hash_table_insert (arguments, "message", message_v);
@@ -269,37 +272,33 @@ _set_own_status (GObject *obj,
 {
     HazeConnection *self = HAZE_CONNECTION (obj);
     const char *status_id = NULL;
-    GValue *message_v;
-    char *message = NULL;
+    const gchar *message = NULL;
     GList *attrs = NULL;
 
-    if (status)
+    if (status != NULL)
+      {
         status_id = _get_purple_status_id (self, status->index);
 
-    if (!status_id)
-    {
+        if (status->optional_arguments != NULL)
+          message = tp_asv_get_string (status->optional_arguments, "message");
+      }
+
+    if (status_id == NULL)
+      {
         /* TODO: Is there a more sensible way to have a default? */
         DEBUG ("defaulting to 'available' status");
         status_id = "available";
-    }
+      }
 
-    if (status->optional_arguments)
-    {
-        message_v = g_hash_table_lookup (status->optional_arguments, "message");
-        if (message_v)
-            message = g_value_dup_string (message_v);
-    }
-
-    if (message)
-    {
+    if (message != NULL)
+      {
         attrs = g_list_append (attrs, "message");
-        attrs = g_list_append (attrs, message);
-    }
+        attrs = g_list_append (attrs, (gchar *) message);
+      }
 
     purple_account_set_status_list (self->account, status_id, TRUE, attrs);
+
     g_list_free (attrs);
-    if (message)
-        g_free (message);
 
     return TRUE;
 }
@@ -319,11 +318,14 @@ haze_connection_presence_class_init (GObjectClass *object_class)
     tp_presence_mixin_class_init (object_class,
         G_STRUCT_OFFSET (HazeConnectionClass, presence_class),
         _status_available, _get_contact_statuses, _set_own_status, statuses);
+
+    tp_presence_mixin_simple_presence_init_dbus_properties (object_class);
 }
 
 void
-haze_connection_presence_init (HazeConnection *self)
+haze_connection_presence_init (GObject *object)
 {
-    tp_presence_mixin_init (G_OBJECT (self), G_STRUCT_OFFSET (HazeConnection,
+    tp_presence_mixin_init (object, G_STRUCT_OFFSET (HazeConnection,
         presence));
+    tp_presence_mixin_simple_presence_register_with_contacts_mixin (object);
 }

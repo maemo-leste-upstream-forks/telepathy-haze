@@ -1,7 +1,7 @@
 /*
  * connection-manager.c - HazeConnectionManager source
  * Copyright (C) 2007 Will Thompson
- * Copyright (C) 2007 Collabora Ltd.
+ * Copyright (C) 2007-2008 Collabora Ltd.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -143,8 +143,9 @@ _param_filter_string_list (const TpCMParamSpec *paramspec,
 
     for (; valid_values != NULL; valid_values = valid_values->next)
     {
-        const gchar *value = valid_values->data;
-        if (!tp_strdiff (value, str))
+        const gchar *valid = valid_values->data;
+
+        if (!tp_strdiff (valid, str))
             return TRUE;
     }
 
@@ -395,32 +396,6 @@ get_protocols (HazeConnectionManagerClass *klass)
     return protocols;
 }
 
-HazeConnection *
-haze_connection_manager_get_haze_connection (HazeConnectionManager *self,
-                                             PurpleAccount *account)
-{
-    HazeConnection *hc;
-    GList *l = self->connections;
-
-    while (l != NULL) {
-        hc = l->data;
-        if(hc->account == account) {
-            return hc;
-        }
-    }
-
-    return NULL;
-}
-
-static void
-connection_shutdown_finished_cb (TpBaseConnection *conn,
-                                 gpointer data)
-{
-    HazeConnectionManager *self = HAZE_CONNECTION_MANAGER (data);
-
-    self->connections = g_list_remove(self->connections, conn);
-}
-
 static TpBaseConnection *
 _haze_connection_manager_new_connection (TpBaseConnectionManager *base,
                                          const gchar *proto,
@@ -439,11 +414,11 @@ _haze_connection_manager_new_connection (TpBaseConnectionManager *base,
                                          "parameters",      params,
                                          NULL);
 
-    cm->connections = g_list_prepend(cm->connections, conn);
-    g_signal_connect (conn, "shutdown-finished",
-                      G_CALLBACK (connection_shutdown_finished_cb),
-                      cm);
-
+    if (!haze_connection_create_account (conn, error))
+      {
+        g_object_unref (conn);
+        return FALSE;
+      }
     return (TpBaseConnection *) conn;
 }
 
@@ -544,14 +519,4 @@ static void
 haze_connection_manager_init (HazeConnectionManager *self)
 {
     DEBUG ("Initializing (HazeConnectionManager *)%p", self);
-}
-
-HazeConnectionManager *
-haze_connection_manager_get (void) {
-    static HazeConnectionManager *manager = NULL;
-    if (G_UNLIKELY(manager == NULL)) {
-        manager = g_object_new (HAZE_TYPE_CONNECTION_MANAGER, NULL);
-    }
-    g_assert (manager != NULL);
-    return manager;
 }

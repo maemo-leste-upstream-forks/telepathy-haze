@@ -3,7 +3,7 @@
 /*
  * connection.h - HazeConnection header
  * Copyright (C) 2007 Will Thompson
- * Copyright (C) 2007 Collabora Ltd.
+ * Copyright (C) 2007-2008 Collabora Ltd.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,6 +23,7 @@
 
 #include <glib-object.h>
 #include <telepathy-glib/base-connection.h>
+#include <telepathy-glib/contacts-mixin.h>
 #include <telepathy-glib/presence-mixin.h>
 
 #include <libpurple/account.h>
@@ -50,6 +51,7 @@ typedef struct _HazeConnectionClass HazeConnectionClass;
 
 struct _HazeConnectionClass {
     TpBaseConnectionClass parent_class;
+    TpContactsMixinClass contacts_class;
     TpPresenceMixinClass presence_class;
 };
 
@@ -61,7 +63,10 @@ struct _HazeConnection {
     HazeContactList *contact_list;
     HazeImChannelFactory *im_factory;
 
+    TpContactsMixin contacts;
     TpPresenceMixin presence;
+
+    gchar **acceptable_avatar_mime_types;
 
     gpointer priv;
 };
@@ -73,13 +78,15 @@ struct _HazeConnection {
 #define HAZE_CONNECTION_GET_PRPL_INFO(conn) \
     (PURPLE_PLUGIN_PROTOCOL_INFO (conn->account->gc->prpl))
 
-PurpleAccountUiOps *haze_get_account_ui_ops ();
-PurpleConnectionUiOps *haze_get_connection_ui_ops ();
+PurpleAccountUiOps *haze_get_account_ui_ops (void);
+PurpleConnectionUiOps *haze_get_connection_ui_ops (void);
 
 const gchar *
 haze_connection_handle_inspect (HazeConnection *conn,
                                 TpHandleType handle_type,
                                 TpHandle handle);
+
+gboolean haze_connection_create_account (HazeConnection *self, GError **error);
 
 GType haze_connection_get_type (void);
 
