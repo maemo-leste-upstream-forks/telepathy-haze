@@ -10,7 +10,7 @@ Build-Depends: cdbs,
                pkg-config (>= 0.9.0),
                libpurple-dev (>= 2.1.1),
                libtelepathy-glib-dev (>= 0.7)
-Standards-Version: 3.8.0
+Standards-Version: 3.8.1
 Vcs-Git: git://git.debian.org/git/pkg-telepathy/telepathy-haze.git
 Vcs-Browser: http://git.debian.org/?p=pkg-telepathy/telepathy-haze.git
 
