@@ -3,6 +3,7 @@
 /*
  * connection-avatars.h - Avatars interface headers of HazeConnection
  * Copyright (C) 2007 Will Thompson
+ * Copyright (C) 2007-2008 Collabora Ltd.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,9 +22,10 @@
  */
 
 
-#include <glib.h>
+#include <glib-object.h>
 
 void haze_connection_avatars_iface_init (gpointer g_iface, gpointer iface_data);
 void haze_connection_avatars_class_init (GObjectClass *object_class);
+void haze_connection_avatars_init (GObject *object);
 
 #endif

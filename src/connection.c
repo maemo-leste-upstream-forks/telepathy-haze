@@ -1,7 +1,7 @@
 /*
  * connection.c - HazeConnection source
  * Copyright (C) 2007 Will Thompson
- * Copyright (C) 2007 Collabora Ltd.
+ * Copyright (C) 2007-2008 Collabora Ltd.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,10 +21,13 @@
 
 #include <string.h>
 
+#include <telepathy-glib/dbus.h>
+#include <telepathy-glib/dbus-properties-mixin.h>
+#include <telepathy-glib/errors.h>
 #include <telepathy-glib/handle-repo-dynamic.h>
 #include <telepathy-glib/handle-repo-static.h>
 #include <telepathy-glib/interfaces.h>
-#include <telepathy-glib/errors.h>
+#include <telepathy-glib/svc-generic.h>
 
 #include <libpurple/accountopt.h>
 #include <libpurple/version.h>
@@ -49,12 +52,18 @@ enum
 G_DEFINE_TYPE_WITH_CODE(HazeConnection,
     haze_connection,
     TP_TYPE_BASE_CONNECTION,
+    G_IMPLEMENT_INTERFACE (TP_TYPE_SVC_DBUS_PROPERTIES,
+        tp_dbus_properties_mixin_iface_init);
     G_IMPLEMENT_INTERFACE (TP_TYPE_SVC_CONNECTION_INTERFACE_PRESENCE,
         tp_presence_mixin_iface_init);
+    G_IMPLEMENT_INTERFACE (TP_TYPE_SVC_CONNECTION_INTERFACE_SIMPLE_PRESENCE,
+        tp_presence_mixin_simple_presence_iface_init);
     G_IMPLEMENT_INTERFACE (TP_TYPE_SVC_CONNECTION_INTERFACE_ALIASING,
         haze_connection_aliasing_iface_init);
     G_IMPLEMENT_INTERFACE (TP_TYPE_SVC_CONNECTION_INTERFACE_AVATARS,
         haze_connection_avatars_iface_init);
+    G_IMPLEMENT_INTERFACE (TP_TYPE_SVC_CONNECTION_INTERFACE_CONTACTS,
+        tp_contacts_mixin_iface_init);
     );
 
 typedef struct _HazeConnectionPrivate
@@ -77,23 +86,7 @@ typedef struct _HazeConnectionPrivate
 #define PC_GET_BASE_CONN(pc) \
     (ACCOUNT_GET_TP_BASE_CONNECTION (purple_connection_get_account (pc)))
 
-static const gchar *
-_get_param_string (GHashTable *parameters,
-                   const gchar *key)
-{
-    GValue *value = (GValue *) g_hash_table_lookup (parameters, key);
-    if (value)
-    {
-        g_assert (G_VALUE_TYPE (value) == G_TYPE_STRING);
-        return (g_value_get_string (value));
-    }
-    else
-    {
-        return NULL;
-    }
-}
-
-void
+static void
 connected_cb (PurpleConnection *pc)
 {
     TpBaseConnection *base_conn = PC_GET_BASE_CONN (pc);
@@ -110,7 +103,7 @@ connected_cb (PurpleConnection *pc)
 
     tp_base_connection_change_status (base_conn,
         TP_CONNECTION_STATUS_CONNECTED,
-        TP_CONNECTION_STATUS_REASON_NONE_SPECIFIED);
+        TP_CONNECTION_STATUS_REASON_REQUESTED);
 }
 
 #if PURPLE_VERSION_CHECK(2,3,0)
@@ -193,18 +186,13 @@ haze_report_disconnect_reason (PurpleConnection *gc,
 #endif
 
 static gboolean
-idle_disconnected_cb(gpointer data)
+idle_finish_shutdown (gpointer data)
 {
-    PurpleAccount *account = (PurpleAccount *) data;
-    HazeConnection *conn = ACCOUNT_GET_HAZE_CONNECTION (account);
-
-    DEBUG ("deleting account %s", account->username);
-    purple_accounts_delete (account);
-    tp_base_connection_finish_shutdown (TP_BASE_CONNECTION (conn));
-    return FALSE;
+  tp_base_connection_finish_shutdown (TP_BASE_CONNECTION (data));
+  return FALSE;
 }
 
-void
+static void
 disconnected_cb (PurpleConnection *pc)
 {
     PurpleAccount *account = purple_connection_get_account (pc);
@@ -230,7 +218,12 @@ disconnected_cb (PurpleConnection *pc)
 
     }
 
-    g_idle_add(idle_disconnected_cb, account);
+    /* Call tp_base_connection_finish_shutdown () in an idle because calling it
+     * might lead to the HazeConnection being destroyed, which would mean the
+     * PurpleAccount were destroyed, but we're currently inside libpurple code
+     * that uses it.
+     */
+    g_idle_add (idle_finish_shutdown, conn);
 }
 
 static void
@@ -281,28 +274,47 @@ _set_option (const PurpleAccountOption *option,
     g_hash_table_remove (context->params, option->pref_name);
 }
 
-static void
-_create_account (HazeConnection *self)
+/**
+ * haze_connection_create_account:
+ *
+ * Attempts to create a PurpleAccount corresponding to this connection. Must be
+ * called immediately after constructing a connection. It's a shame GObject
+ * constructors can't fail.
+ *
+ * Returns: %TRUE if the account was successfully created and hooked up;
+ *          %FALSE with @error set in the TP_ERRORS domain if the account
+ *          already existed or another error occurred.
+ */
+gboolean
+haze_connection_create_account (HazeConnection *self,
+                                GError **error)
 {
     HazeConnectionPrivate *priv = HAZE_CONNECTION_GET_PRIVATE(self);
     GHashTable *params = priv->parameters;
     PurplePluginProtocolInfo *prpl_info = priv->protocol_info->prpl_info;
-
+    const gchar *prpl_id = priv->protocol_info->prpl_id;
     const gchar *username, *password;
     struct _i_want_closure context;
 
-    username = _get_param_string (params, "account");
-    g_assert (username);
+    g_return_val_if_fail (self->account == NULL, FALSE);
 
-    g_assert (self->account == NULL);
+    username = tp_asv_get_string (params, "account");
+    g_assert (username != NULL);
+
+    if (purple_accounts_find (username, prpl_id) != NULL)
+      {
+        g_set_error (error, TP_ERRORS, TP_ERROR_NOT_AVAILABLE,
+            "a connection already exists to %s on %s", username, prpl_id);
+        return FALSE;
+      }
+
     self->account = purple_account_new (username, priv->protocol_info->prpl_id);
     purple_accounts_add (self->account);
-    g_assert (self->account);
     g_hash_table_remove (params, "account");
 
     self->account->ui_data = self;
 
-    password = _get_param_string (params, "password");
+    password = tp_asv_get_string (params, "password");
     if (password)
     {
         purple_account_set_password (self->account, password);
@@ -314,6 +326,8 @@ _create_account (HazeConnection *self)
     g_list_foreach (prpl_info->protocol_options, (GFunc) _set_option, &context);
 
     g_hash_table_foreach (params, (GHFunc) _warn_unhandled_parameter, "lala");
+
+    return TRUE;
 }
 
 static gboolean
@@ -321,9 +335,10 @@ _haze_connection_start_connecting (TpBaseConnection *base,
                                    GError **error)
 {
     HazeConnection *self = HAZE_CONNECTION(base);
-
     TpHandleRepoIface *contact_handles =
         tp_base_connection_get_handles (base, TP_HANDLE_TYPE_CONTACT);
+
+    g_return_val_if_fail (self->account != NULL, FALSE);
 
     base->self_handle = tp_handle_ensure (contact_handles,
         purple_account_get_username (self->account), NULL, error);
@@ -390,23 +405,23 @@ _haze_connection_create_handle_repos (TpBaseConnection *base,
 }
 
 static GPtrArray *
-_haze_connection_create_channel_factories (TpBaseConnection *base)
+_haze_connection_create_channel_managers (TpBaseConnection *base)
 {
     HazeConnection *self = HAZE_CONNECTION(base);
-    GPtrArray *channel_factories = g_ptr_array_new ();
+    GPtrArray *channel_managers = g_ptr_array_new ();
 
     self->im_factory = HAZE_IM_CHANNEL_FACTORY (
         g_object_new (HAZE_TYPE_IM_CHANNEL_FACTORY, "connection", self, NULL));
-    g_ptr_array_add (channel_factories, self->im_factory);
+    g_ptr_array_add (channel_managers, self->im_factory);
 
     self->contact_list = HAZE_CONTACT_LIST (
         g_object_new (HAZE_TYPE_CONTACT_LIST, "connection", self, NULL));
-    g_ptr_array_add (channel_factories, self->contact_list);
+    g_ptr_array_add (channel_managers, self->contact_list);
 
-    return channel_factories;
+    return channel_managers;
 }
 
-gchar *
+static gchar *
 haze_connection_get_unique_connection_name(TpBaseConnection *base)
 {
     HazeConnection *self = HAZE_CONNECTION(base);
@@ -467,15 +482,25 @@ haze_connection_constructor (GType type,
     HazeConnection *self = HAZE_CONNECTION (
             G_OBJECT_CLASS (haze_connection_parent_class)->constructor (
                 type, n_construct_properties, construct_params));
+    GObject *object = (GObject *) self;
     HazeConnectionPrivate *priv = HAZE_CONNECTION_GET_PRIVATE (self);
 
     DEBUG ("Post-construction: (HazeConnection *)%p", self);
+
+    self->acceptable_avatar_mime_types = NULL;
 
     priv->dispose_has_run = FALSE;
 
     priv->disconnecting = FALSE;
 
-    _create_account (self);
+    tp_contacts_mixin_init (object,
+        G_STRUCT_OFFSET (HazeConnection, contacts));
+    tp_base_connection_register_with_contacts_mixin (
+        TP_BASE_CONNECTION (self));
+
+    haze_connection_aliasing_init (object);
+    haze_connection_avatars_init (object);
+    haze_connection_presence_init (object);
 
     return (GObject *)self;
 }
@@ -502,7 +527,18 @@ haze_connection_dispose (GObject *object)
 static void
 haze_connection_finalize (GObject *object)
 {
+    HazeConnection *self = HAZE_CONNECTION (object);
+
+    tp_contacts_mixin_finalize (object);
     tp_presence_mixin_finalize (object);
+
+    g_strfreev (self->acceptable_avatar_mime_types);
+
+    if (self->account != NULL)
+      {
+        DEBUG ("deleting account %s", self->account->username);
+        purple_accounts_delete (self->account);
+      }
 
     G_OBJECT_CLASS (haze_connection_parent_class)->finalize (object);
 }
@@ -515,6 +551,8 @@ haze_connection_class_init (HazeConnectionClass *klass)
     GParamSpec *param_spec;
     static const gchar *interfaces_always_present[] = {
         TP_IFACE_CONNECTION_INTERFACE_PRESENCE,
+        TP_IFACE_CONNECTION_INTERFACE_SIMPLE_PRESENCE,
+        TP_IFACE_CONNECTION_INTERFACE_CONTACTS,
         /* TODO: This is a lie.  Not all protocols supported by libpurple
          *       actually have the concept of a user-settable alias, but
          *       there's no way for the UI to know (yet).
@@ -532,8 +570,8 @@ haze_connection_class_init (HazeConnectionClass *klass)
     object_class->finalize = haze_connection_finalize;
 
     base_class->create_handle_repos = _haze_connection_create_handle_repos;
-    base_class->create_channel_factories =
-        _haze_connection_create_channel_factories;
+    base_class->create_channel_managers =
+        _haze_connection_create_channel_managers;
     base_class->get_unique_connection_name =
         haze_connection_get_unique_connection_name;
     base_class->start_connecting = _haze_connection_start_connecting;
@@ -561,6 +599,11 @@ haze_connection_class_init (HazeConnectionClass *klass)
     g_object_class_install_property (object_class, PROP_PROTOCOL_INFO,
                                      param_spec);
 
+    tp_dbus_properties_mixin_class_init (object_class, 0);
+
+    tp_contacts_mixin_class_init (object_class,
+        G_STRUCT_OFFSET (HazeConnectionClass, contacts_class));
+
     haze_connection_presence_class_init (object_class);
     haze_connection_aliasing_class_init (object_class);
     haze_connection_avatars_class_init (object_class);
@@ -572,8 +615,6 @@ haze_connection_init (HazeConnection *self)
     DEBUG ("Initializing (HazeConnection *)%p", self);
     self->priv = G_TYPE_INSTANCE_GET_PRIVATE (self, HAZE_TYPE_CONNECTION,
                                               HazeConnectionPrivate);
-
-    haze_connection_presence_init (self);
 }
 
 static PurpleAccountUiOps

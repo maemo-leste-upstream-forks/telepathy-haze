@@ -1,7 +1,7 @@
 /*
  * connection-avatars.c - Avatars interface implementation of HazeConnection
  * Copyright (C) 2007 Will Thompson
- * Copyright (C) 2007 Collabora Ltd.
+ * Copyright (C) 2007-2008 Collabora Ltd.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,17 +19,48 @@
  *
  */
 
+#include "connection-avatars.h"
+
 #include <string.h>
 
+#include <telepathy-glib/contacts-mixin.h>
+#include <telepathy-glib/interfaces.h>
 #include <telepathy-glib/svc-connection.h>
 
 #include <libpurple/cipher.h>
 
-#include "connection-avatars.h"
 #include "connection.h"
 #include "debug.h"
 
-void
+static gchar **
+_get_acceptable_mime_types (HazeConnection *self)
+{
+    PurplePluginProtocolInfo *prpl_info = HAZE_CONNECTION_GET_PRPL_INFO (self);
+
+    g_return_val_if_fail (prpl_info->icon_spec.format != NULL, NULL);
+
+    if (self->acceptable_avatar_mime_types == NULL)
+    {
+        gchar **mime_types, **i;
+        gchar *format;
+
+        mime_types = g_strsplit (prpl_info->icon_spec.format, ",", 0);
+
+        for (i = mime_types; *i != NULL; i++)
+        {
+            format = *i;
+            /* FIXME: image/ico is not the correct mime type. */
+            *i = g_strconcat ("image/", format, NULL);
+            g_free (format);
+        }
+
+        self->acceptable_avatar_mime_types = mime_types;
+    }
+
+    return self->acceptable_avatar_mime_types;
+}
+
+static void
 haze_connection_get_avatar_requirements (TpSvcConnectionInterfaceAvatars *self,
                                          DBusGMethodInvocation *context)
 {
@@ -37,8 +68,6 @@ haze_connection_get_avatar_requirements (TpSvcConnectionInterfaceAvatars *self,
     TpBaseConnection *base = TP_BASE_CONNECTION (conn);
     PurplePluginProtocolInfo *prpl_info;
     PurpleBuddyIconSpec *icon_spec;
-    gchar **mime_types, **i;
-    gchar *format;
 
     TP_BASE_CONNECTION_ERROR_IF_NOT_CONNECTED (base, context);
 
@@ -48,22 +77,11 @@ haze_connection_get_avatar_requirements (TpSvcConnectionInterfaceAvatars *self,
     /* If the spec or the formats are null, this iface wasn't implemented. */
     g_assert (icon_spec != NULL && icon_spec->format != NULL);
 
-    mime_types = g_strsplit (icon_spec->format, ",", 0);
-
-    for (i = mime_types; *i != NULL; i++)
-    {
-        format = *i;
-        /* FIXME: image/ico is not the correct mime type. */
-        *i = g_strconcat ("image/", format, NULL);
-        g_free (format);
-    }
-
     tp_svc_connection_interface_avatars_return_from_get_avatar_requirements (
-        context, (const gchar **) mime_types,
+        context, (const gchar **) _get_acceptable_mime_types (conn),
         icon_spec->min_width, icon_spec->min_height,
         icon_spec->max_width, icon_spec->max_height,
         icon_spec->max_filesize);
-    g_strfreev (mime_types);
 }
 
 static GArray *
@@ -157,7 +175,7 @@ get_handle_token (HazeConnection *conn,
     return token;
 }
 
-void
+static void
 haze_connection_get_avatar_tokens (TpSvcConnectionInterfaceAvatars *self,
                                    const GArray *contacts,
                                    DBusGMethodInvocation *context)
@@ -181,7 +199,7 @@ haze_connection_get_avatar_tokens (TpSvcConnectionInterfaceAvatars *self,
     g_strfreev (icons);
 }
 
-void
+static void
 haze_connection_get_known_avatar_tokens (TpSvcConnectionInterfaceAvatars *self,
                                          const GArray *contacts,
                                          DBusGMethodInvocation *context)
@@ -244,7 +262,7 @@ haze_connection_get_known_avatar_tokens (TpSvcConnectionInterfaceAvatars *self,
     g_hash_table_unref (tokens);
 }
 
-void
+static void
 haze_connection_request_avatar (TpSvcConnectionInterfaceAvatars *self,
                                 guint contact,
                                 DBusGMethodInvocation *context)
@@ -267,17 +285,17 @@ haze_connection_request_avatar (TpSvcConnectionInterfaceAvatars *self,
     else
     {
         DEBUG ("handle %u has no avatar", contact);
-        gchar *message = g_strdup_printf ("handle %u has no avatar", contact);
-        g_set_error (&error, TP_ERRORS, TP_ERROR_NOT_AVAILABLE, message);
+        g_set_error (&error, TP_ERRORS, TP_ERROR_NOT_AVAILABLE,
+                     "handle %u has no avatar", contact);
+
 
         dbus_g_method_return_error (context, error);
 
         g_error_free (error);
-        g_free (message);
     }
 }
 
-void
+static void
 haze_connection_request_avatars (TpSvcConnectionInterfaceAvatars *self,
                                  const GArray *contacts,
                                  DBusGMethodInvocation *context)
@@ -305,7 +323,7 @@ haze_connection_request_avatars (TpSvcConnectionInterfaceAvatars *self,
     tp_svc_connection_interface_avatars_return_from_request_avatars (context);
 }
 
-void
+static void
 haze_connection_clear_avatar (TpSvcConnectionInterfaceAvatars *self,
                               DBusGMethodInvocation *context)
 {
@@ -320,7 +338,7 @@ haze_connection_clear_avatar (TpSvcConnectionInterfaceAvatars *self,
         base_conn->self_handle, "");
 }
 
-void
+static void
 haze_connection_set_avatar (TpSvcConnectionInterfaceAvatars *self,
                             const GArray *avatar,
                             const gchar *mime_type,
@@ -331,26 +349,58 @@ haze_connection_set_avatar (TpSvcConnectionInterfaceAvatars *self,
     PurpleAccount *account = conn->account;
     PurplePluginProtocolInfo *prpl_info = HAZE_CONNECTION_GET_PRPL_INFO (conn);
 
+    GError *error = NULL;
+
     guchar *icon_data = NULL;
     size_t icon_len = avatar->len;
     gchar *token;
+    gchar **mime_types = _get_acceptable_mime_types (conn);
+
+    gboolean acceptable_mime_type = FALSE;
 
     const size_t max_filesize = prpl_info->icon_spec.max_filesize;
 
     if (max_filesize > 0 && icon_len > max_filesize)
     {
-        GError *error = NULL;
-        gchar *message = g_strdup_printf ("avatar is %uB, but the limit is %uB",
-            icon_len, max_filesize);
-        g_set_error (&error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT, message);
+        g_set_error (&error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT,
+                     "avatar is %" G_GSIZE_FORMAT "B, "
+                     "but the limit is %" G_GSIZE_FORMAT "B",
+                     icon_len, max_filesize);
 
         dbus_g_method_return_error (context, error);
 
         g_error_free (error);
-        g_free (message);
+        return;
+    }
+
+    /* FIXME: This is a work-around for mission control passing an empty
+     *        mime_type when it re-sets your avatar on connection.  Since it
+     *        only caches the avatar if it was set correctly by Empathy, it's
+     *        most likely actually acceptable, but the work-around should
+     *        probably go away when MC is fixed.
+     */
+    if (*mime_type == '\0')
+        acceptable_mime_type = TRUE;
+
+    while (!acceptable_mime_type && *mime_types != NULL)
+    {
+        if (!tp_strdiff (*mime_types, mime_type))
+            acceptable_mime_type = TRUE;
+        mime_types++;
+    }
+
+    if (!acceptable_mime_type)
+    {
+        g_set_error (&error, TP_ERRORS, TP_ERROR_INVALID_ARGUMENT,
+            "'%s' is not a supported MIME type", mime_type);
+
+        dbus_g_method_return_error (context, error);
+
+        g_error_free (error);
 
         return;
     }
+
 
     /* purple_buddy_icons_set_account_icon () takes ownership of the pointer
      * passed to it, but 'avatar' will be freed soon.
@@ -386,7 +436,7 @@ haze_connection_avatars_iface_init (gpointer g_iface,
 #undef IMPLEMENT
 }
 
-void
+static void
 buddy_icon_changed_cb (PurpleBuddy *buddy,
                        gpointer unused)
 {
@@ -415,4 +465,35 @@ haze_connection_avatars_class_init (GObjectClass *object_class)
 
     purple_signal_connect (blist_handle, "buddy-icon-changed", object_class,
         PURPLE_CALLBACK (buddy_icon_changed_cb), NULL);
+}
+
+static void
+fill_contact_attributes (GObject *object,
+                         const GArray *contacts,
+                         GHashTable *attributes_hash)
+{
+    HazeConnection *self = HAZE_CONNECTION (object);
+    guint i;
+
+    for (i = 0; i < contacts->len; i++)
+    {
+        TpHandle handle = g_array_index (contacts, guint, i);
+        gchar *token = get_handle_token (self, handle);
+        GValue *value = tp_g_value_slice_new (G_TYPE_STRING);
+
+        g_assert (token != NULL);
+        g_value_set_string (value, token);
+
+        /* this steals the GValue */
+        tp_contacts_mixin_set_contact_attribute (attributes_hash, handle,
+            TP_IFACE_CONNECTION_INTERFACE_AVATARS "/token", value);
+    }
+}
+
+void
+haze_connection_avatars_init (GObject *object)
+{
+    tp_contacts_mixin_add_contact_attributes_iface (object,
+        TP_IFACE_CONNECTION_INTERFACE_AVATARS,
+        fill_contact_attributes);
 }

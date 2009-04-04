@@ -1,7 +1,7 @@
 /*
  * main.c - entry point and libpurple boilerplate for telepathy-haze
  * Copyright (C) 2007 Will Thompson
- * Copyright (C) 2007 Collabora Ltd.
+ * Copyright (C) 2007-2008 Collabora Ltd.
  * Portions taken from libpurple/examples/nullclient.c:
  *   Copyright (C) 2007 Sadrul Habib Chowdhury, Sean Egan, Gary Kramlich,
  *                      Mark Doliner, Richard Laager
@@ -134,7 +134,7 @@ static PurpleEventLoopUiOps glib_eventloops =
 static char *user_dir = NULL;
 
 static void
-haze_ui_init ()
+haze_ui_init (void)
 {
     purple_accounts_set_ui_ops (haze_get_account_ui_ops ());
     purple_conversations_set_ui_ops (haze_get_conv_ui_ops ());
@@ -226,7 +226,7 @@ get_cm (void)
     fatal_mask &= ~G_LOG_LEVEL_CRITICAL;
     g_log_set_always_fatal (fatal_mask);
 
-    return (TpBaseConnectionManager *) haze_connection_manager_get ();
+    return (TpBaseConnectionManager *) g_object_new (HAZE_TYPE_CONNECTION_MANAGER, NULL);
 }
 
 static gboolean

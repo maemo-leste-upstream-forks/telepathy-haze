@@ -1,6 +1,7 @@
 /*
  * contact-list-channel.c - HazeContactListChannel source
  * Copyright (C) 2007 Will Thompson
+ * Copyright (C) 2007-2008 Collabora Ltd.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,8 +20,10 @@
  */
 
 #include <telepathy-glib/dbus.h>
+#include <telepathy-glib/exportable-channel.h>
 #include <telepathy-glib/interfaces.h>
 #include <telepathy-glib/channel-iface.h>
+#include <telepathy-glib/svc-generic.h>
 
 #include "contact-list-channel.h"
 #include "connection.h"
@@ -45,7 +48,7 @@ struct _PublishRequestData {
 
 
 static PublishRequestData *
-publish_request_data_new ()
+publish_request_data_new (void)
 {
     return g_slice_new0 (PublishRequestData);
 }
@@ -94,8 +97,16 @@ G_DEFINE_TYPE_WITH_CODE (HazeContactListChannel,
     G_IMPLEMENT_INTERFACE (TP_TYPE_CHANNEL_IFACE, NULL);
     G_IMPLEMENT_INTERFACE (TP_TYPE_SVC_CHANNEL_TYPE_CONTACT_LIST, NULL);
     G_IMPLEMENT_INTERFACE (TP_TYPE_SVC_CHANNEL_INTERFACE_GROUP,
-      tp_group_mixin_iface_init);
-    )
+        tp_group_mixin_iface_init);
+    G_IMPLEMENT_INTERFACE (TP_TYPE_SVC_DBUS_PROPERTIES,
+        tp_dbus_properties_mixin_iface_init);
+    G_IMPLEMENT_INTERFACE (TP_TYPE_EXPORTABLE_CHANNEL, NULL))
+
+const char *haze_contact_list_channel_interfaces[] = {
+    TP_IFACE_CHANNEL_INTERFACE_GROUP,
+    NULL
+};
+
 
 /* properties: */
 enum {
@@ -104,6 +115,13 @@ enum {
     PROP_CHANNEL_TYPE,
     PROP_HANDLE_TYPE,
     PROP_HANDLE,
+    PROP_TARGET_ID,
+    PROP_INTERFACES,
+    PROP_REQUESTED,
+    PROP_INITIATOR_HANDLE,
+    PROP_INITIATOR_ID,
+    PROP_CHANNEL_PROPERTIES,
+    PROP_CHANNEL_DESTROYED,
 
     LAST_PROPERTY
 };
@@ -295,7 +313,7 @@ _list_remove_member_cb (HazeContactListChannel *chan,
         case HAZE_LIST_HANDLE_PUBLISH:
         {
             gpointer key = GUINT_TO_POINTER (handle);
-            TpIntSet *remove = tp_intset_new ();
+            TpIntSet *to_remove = tp_intset_new ();
             PublishRequestData *request_data =
                 g_hash_table_lookup (priv->pending_publish_requests, key);
             g_assert (request_data != NULL);
@@ -303,11 +321,11 @@ _list_remove_member_cb (HazeContactListChannel *chan,
             DEBUG ("denying publish request for %s", bname);
             request_data->deny(request_data->data);
 
-            tp_intset_add (remove, handle);
+            tp_intset_add (to_remove, handle);
             tp_group_mixin_change_members (G_OBJECT (chan), message, NULL,
-                remove, NULL, NULL, base_conn->self_handle,
+                to_remove, NULL, NULL, base_conn->self_handle,
                 TP_CHANNEL_GROUP_CHANGE_REASON_NONE);
-            tp_intset_destroy (remove);
+            tp_intset_destroy (to_remove);
 
             remove_pending_publish_request (chan, handle);
 
@@ -396,7 +414,7 @@ haze_request_authorize (PurpleAccount *account,
 
     HazeContactListChannel *publish =
         haze_contact_list_get_channel (conn->contact_list,
-            TP_HANDLE_TYPE_LIST, HAZE_LIST_HANDLE_PUBLISH, NULL);
+            TP_HANDLE_TYPE_LIST, HAZE_LIST_HANDLE_PUBLISH, NULL, NULL);
     HazeContactListChannelPrivate *priv =
         HAZE_CONTACT_LIST_CHANNEL_GET_PRIVATE (publish);
 
@@ -446,14 +464,15 @@ haze_close_account_request (gpointer request_data_)
 
     TpBaseConnection *base_conn = TP_BASE_CONNECTION (priv->conn);
 
-    TpIntSet *remove = tp_intset_new ();
+    TpIntSet *to_remove = tp_intset_new ();
 
     DEBUG ("cancelling publish request for handle %u", request_data->handle);
 
-    tp_intset_add (remove, request_data->handle);
-    tp_group_mixin_change_members (G_OBJECT (publish), NULL, NULL, remove, NULL,
-        NULL, base_conn->self_handle, TP_CHANNEL_GROUP_CHANGE_REASON_NONE);
-    tp_intset_destroy (remove);
+    tp_intset_add (to_remove, request_data->handle);
+    tp_group_mixin_change_members (G_OBJECT (publish), NULL, NULL, to_remove,
+        NULL, NULL, base_conn->self_handle,
+        TP_CHANNEL_GROUP_CHANGE_REASON_NONE);
+    tp_intset_destroy (to_remove);
 
     remove_pending_publish_request (publish, request_data->handle);
 
@@ -508,6 +527,8 @@ haze_contact_list_channel_constructor (GType type, guint n_props,
 
     tp_group_mixin_init (obj, G_STRUCT_OFFSET (HazeContactListChannel, group),
                          contact_repo, self_handle);
+
+    tp_group_mixin_change_flags (obj, TP_CHANNEL_GROUP_FLAG_PROPERTIES, 0);
 
     switch (handle_type) {
         case TP_HANDLE_TYPE_GROUP:
@@ -584,7 +605,7 @@ haze_contact_list_channel_dispose (GObject *object)
         G_OBJECT_CLASS (haze_contact_list_channel_parent_class)->dispose (object);
 }
 
-void
+static void
 haze_contact_list_channel_finalize (GObject *object)
 {
 /*
@@ -606,6 +627,7 @@ haze_contact_list_channel_get_property (GObject    *object,
 {
     HazeContactListChannel *self = HAZE_CONTACT_LIST_CHANNEL (object);
     HazeContactListChannelPrivate *priv = HAZE_CONTACT_LIST_CHANNEL_GET_PRIVATE(self);
+    TpBaseConnection *base_conn = TP_BASE_CONNECTION (priv->conn);
 
     switch (property_id) {
         case PROP_OBJECT_PATH:
@@ -620,8 +642,44 @@ haze_contact_list_channel_get_property (GObject    *object,
         case PROP_HANDLE:
             g_value_set_uint (value, priv->handle);
             break;
+        case PROP_TARGET_ID:
+        {
+            TpHandleRepoIface *repo = tp_base_connection_get_handles (base_conn,
+                priv->handle_type);
+
+            g_value_set_string (value, tp_handle_inspect (repo, priv->handle));
+            break;
+        }
+        case PROP_INITIATOR_HANDLE:
+            g_value_set_uint (value, 0);
+            break;
+        case PROP_INITIATOR_ID:
+            g_value_set_static_string (value, "");
+            break;
+        case PROP_REQUESTED:
+            g_value_set_boolean (value, FALSE);
+            break;
         case PROP_CONNECTION:
             g_value_set_object (value, priv->conn);
+            break;
+        case PROP_INTERFACES:
+            g_value_set_boxed (value, haze_contact_list_channel_interfaces);
+            break;
+        case PROP_CHANNEL_DESTROYED:
+            g_value_set_boolean (value, priv->closed);
+            break;
+        case PROP_CHANNEL_PROPERTIES:
+            g_value_take_boxed (value,
+                tp_dbus_properties_mixin_make_properties_hash (object,
+                    TP_IFACE_CHANNEL, "TargetHandle",
+                    TP_IFACE_CHANNEL, "TargetHandleType",
+                    TP_IFACE_CHANNEL, "ChannelType",
+                    TP_IFACE_CHANNEL, "TargetID",
+                    TP_IFACE_CHANNEL, "InitiatorHandle",
+                    TP_IFACE_CHANNEL, "InitiatorID",
+                    TP_IFACE_CHANNEL, "Requested",
+                    TP_IFACE_CHANNEL, "Interfaces",
+                    NULL));
             break;
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
@@ -669,10 +727,29 @@ haze_contact_list_channel_class_init (HazeContactListChannelClass *klass)
     GObjectClass *object_class = G_OBJECT_CLASS (klass);
     GParamSpec *param_spec;
 
-    tp_group_mixin_class_init (object_class,
-        G_STRUCT_OFFSET (HazeContactListChannelClass, group_class),
-        _haze_contact_list_channel_add_member_cb,
-        _haze_contact_list_channel_remove_member_cb);
+    static gboolean properties_mixin_initialized = FALSE;
+    static TpDBusPropertiesMixinPropImpl channel_props[] = {
+        { "TargetHandleType", "handle-type", NULL },
+        { "TargetHandle", "handle", NULL },
+        { "TargetID", "target-id", NULL },
+        { "ChannelType", "channel-type", NULL },
+        { "Interfaces", "interfaces", NULL },
+        { "Requested", "requested", NULL },
+        { "InitiatorHandle", "initiator-handle", NULL },
+        { "InitiatorID", "initiator-id", NULL },
+        { NULL }
+    };
+    static TpDBusPropertiesMixinIfaceImpl prop_interfaces[] = {
+        { TP_IFACE_CHANNEL,
+          tp_dbus_properties_mixin_getter_gobject_properties,
+          NULL,
+          channel_props,
+        },
+        { NULL }
+    };
+
+    g_type_class_add_private (object_class,
+                              sizeof(HazeContactListChannelPrivate));
 
     object_class->constructor = haze_contact_list_channel_constructor;
 
@@ -682,15 +759,44 @@ haze_contact_list_channel_class_init (HazeContactListChannelClass *klass)
     object_class->get_property = haze_contact_list_channel_get_property;
     object_class->set_property = haze_contact_list_channel_set_property;
 
+
     param_spec = g_param_spec_object ("connection", "HazeConnection object",
-                                      "Haze connection object that owns this "
-                                      "contact list channel object.",
-                                      HAZE_TYPE_CONNECTION,
-                                      G_PARAM_CONSTRUCT_ONLY |
-                                      G_PARAM_READWRITE |
-                                      G_PARAM_STATIC_NICK |
-                                      G_PARAM_STATIC_BLURB);
+        "Haze connection object that owns this contact list channel object.",
+        HAZE_TYPE_CONNECTION,
+        G_PARAM_CONSTRUCT_ONLY | G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS);
     g_object_class_install_property (object_class, PROP_CONNECTION, param_spec);
+
+    param_spec = g_param_spec_boxed ("interfaces", "Extra D-Bus interfaces",
+        "Additional Channel.Interface.* interfaces",
+        G_TYPE_STRV,
+        G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
+    g_object_class_install_property (object_class, PROP_INTERFACES, param_spec);
+
+    param_spec = g_param_spec_string ("target-id", "Contact list name",
+        "The stringy name of the contact list (\"subscribe\" etc.)",
+        NULL,
+        G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
+    g_object_class_install_property (object_class, PROP_TARGET_ID, param_spec);
+
+    param_spec = g_param_spec_uint ("initiator-handle", "Initiator's handle",
+        "The contact who initiated the channel",
+        0, G_MAXUINT32, 0,
+        G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
+    g_object_class_install_property (object_class, PROP_INITIATOR_HANDLE,
+        param_spec);
+
+    param_spec = g_param_spec_string ("initiator-id", "Initiator's ID",
+        "The string obtained by inspecting the initiator-handle",
+        NULL,
+        G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
+    g_object_class_install_property (object_class, PROP_INITIATOR_ID,
+        param_spec);
+
+    param_spec = g_param_spec_boolean ("requested", "Requested?",
+        "True if this channel was requested by the local user",
+        FALSE,
+        G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
+    g_object_class_install_property (object_class, PROP_REQUESTED, param_spec);
 
     g_object_class_override_property (object_class, PROP_OBJECT_PATH,
             "object-path");
@@ -699,14 +805,31 @@ haze_contact_list_channel_class_init (HazeContactListChannelClass *klass)
     g_object_class_override_property (object_class, PROP_HANDLE_TYPE,
             "handle-type");
     g_object_class_override_property (object_class, PROP_HANDLE, "handle");
+    g_object_class_override_property (object_class, PROP_CHANNEL_DESTROYED,
+        "channel-destroyed");
+    g_object_class_override_property (object_class, PROP_CHANNEL_PROPERTIES,
+        "channel-properties");
 
-    g_type_class_add_private (object_class,
-                              sizeof(HazeContactListChannelPrivate));
+
+    tp_group_mixin_class_init (object_class,
+        G_STRUCT_OFFSET (HazeContactListChannelClass, group_class),
+        _haze_contact_list_channel_add_member_cb,
+        _haze_contact_list_channel_remove_member_cb);
+
+    if (!properties_mixin_initialized)
+    {
+        properties_mixin_initialized = TRUE;
+        klass->properties_class.interfaces = prop_interfaces;
+        tp_dbus_properties_mixin_class_init (object_class,
+            G_STRUCT_OFFSET (HazeContactListChannelClass, properties_class));
+
+        tp_group_mixin_init_dbus_properties (object_class);
+    }
 }
 
 static void
 haze_contact_list_channel_close (TpSvcChannel *iface,
-                             DBusGMethodInvocation *context)
+                                 DBusGMethodInvocation *context)
 {
     HazeContactListChannel *self = HAZE_CONTACT_LIST_CHANNEL (iface);
     HazeContactListChannelPrivate *priv;
@@ -761,13 +884,13 @@ haze_contact_list_channel_get_handle (TpSvcChannel *iface,
     tp_svc_channel_return_from_get_handle (context, priv->handle_type,
         priv->handle);
 }
+
 static void
 haze_contact_list_channel_get_interfaces (TpSvcChannel *self,
                                           DBusGMethodInvocation *context)
 {
-    const char *interfaces[] = { TP_IFACE_CHANNEL_INTERFACE_GROUP, NULL };
-
-    tp_svc_channel_return_from_get_interfaces (context, interfaces);
+    tp_svc_channel_return_from_get_interfaces (context,
+        haze_contact_list_channel_interfaces);
 }
 
 static void
