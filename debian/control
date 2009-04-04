@@ -3,7 +3,8 @@ Section: net
 Priority: optional
 Maintainer: Debian Telepathy maintainers <pkg-telepathy-maintainers@lists.alioth.debian.org>
 Uploaders: Laurent Bigonville <bigon@debian.org>,
-           Simon McVittie <smcv@debian.org>
+           Simon McVittie <smcv@debian.org>,
+           Jonny Lamb <jonny@debian.org>
 Build-Depends: cdbs,
                debhelper (>= 5),
                pkg-config (>= 0.9.0),

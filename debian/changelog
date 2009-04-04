@@ -1,8 +1,9 @@
 telepathy-haze (0.3.0-1) UNRELEASED; urgency=low
 
   * New upstream release.
+  * debian/control: Added myself to Uploaders.
 
- -- Jonny Lamb <jonny@debian.org>  Sat, 04 Apr 2009 13:06:24 +0100
+ -- Jonny Lamb <jonny@debian.org>  Sat, 04 Apr 2009 13:07:06 +0100
 
 telepathy-haze (0.2.1-2) unstable; urgency=low
 
