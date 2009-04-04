@@ -9,8 +9,10 @@ telepathy-haze (0.3.0-1) UNRELEASED; urgency=low
     + Added libdbus-glib-1-dev build-dep.
     + Removed unnecessary duplicate Section line.
   * debian/gbp.conf: Removed no-create-orig line.
+  * debian/copyright: Added copyright, updated Will's email address,
+    and made common-licenses copyrights point to versioned files.
 
- -- Jonny Lamb <jonny@debian.org>  Sat, 04 Apr 2009 13:14:03 +0100
+ -- Jonny Lamb <jonny@debian.org>  Sat, 04 Apr 2009 13:54:36 +0100
 
 telepathy-haze (0.2.1-2) unstable; urgency=low
 
