@@ -1,4 +1,4 @@
-telepathy-haze (0.3.0-1) UNRELEASED; urgency=low
+telepathy-haze (0.3.0-1) unstable; urgency=low
 
   * New upstream release.
   * debian/control:
@@ -12,7 +12,7 @@ telepathy-haze (0.3.0-1) UNRELEASED; urgency=low
   * debian/copyright: Added copyright, updated Will's email address,
     and made common-licenses copyrights point to versioned files.
 
- -- Jonny Lamb <jonny@debian.org>  Sat, 04 Apr 2009 13:54:36 +0100
+ -- Jonny Lamb <jonny@debian.org>  Sat, 04 Apr 2009 13:56:08 +0100
 
 telepathy-haze (0.2.1-2) unstable; urgency=low
 
