@@ -8,7 +8,7 @@ AC_PREREQ([2.59])
 
 m4_define([haze_major_version], [0])
 m4_define([haze_minor_version], [3])
-m4_define([haze_micro_version], [0])
+m4_define([haze_micro_version], [1])
 m4_define([haze_nano_version], [0])
 
 m4_define([haze_base_version],
@@ -91,6 +91,8 @@ AM_CONDITIONAL([WANT_TWISTED_TESTS], test false != "$TEST_PYTHON")
 #AC_SUBST(DBUS_SERVICES_DIR)
 #AC_DEFINE_UNQUOTED(DBUS_SERVICES_DIR, "$DBUS_SERVICES_DIR", [DBus services directory])
 
+SHAVE_INIT(.)
+
 AC_OUTPUT([Makefile
            src/Makefile
            data/Makefile
@@ -98,4 +100,6 @@ AC_OUTPUT([Makefile
 	   tests/Makefile
 	   tests/twisted/Makefile
 	   tools/Makefile
+           shave
+           shave-libtool
            ])
