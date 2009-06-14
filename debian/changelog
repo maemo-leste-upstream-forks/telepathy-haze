@@ -1,8 +1,8 @@
-telepathy-haze (0.3.1-1) UNRELEASED; urgency=low
+telepathy-haze (0.3.1-1) unstable; urgency=low
 
   * New upstream release.
 
- -- Laurent Bigonville <bigon@debian.org>  Sun, 14 Jun 2009 10:57:59 +0200
+ -- Laurent Bigonville <bigon@debian.org>  Sun, 14 Jun 2009 11:12:57 +0200
 
 telepathy-haze (0.3.0-1) unstable; urgency=low
 
