@@ -9,6 +9,10 @@ include /usr/share/cdbs/1/rules/simple-patchsys.mk
 include /usr/share/cdbs/1/rules/utils.mk
 common-binary-post-install-arch:: list-missing
 
+#Don't ship .manager file
+common-install-arch::
+	rm -rf debian/telepathy-haze//usr/share/telepathy/
+
 # Man page
 common-post-build-arch::
 	sed -e s!@libexecdir@!/usr/lib/telepathy! \
