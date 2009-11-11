@@ -11,7 +11,7 @@ common-binary-post-install-arch:: list-missing
 
 #Don't ship .manager file
 common-install-arch::
-	rm -rf debian/telepathy-haze//usr/share/telepathy/
+	rm -rf debian/telepathy-haze/usr/share/telepathy/
 
 # Man page
 common-post-build-arch::
