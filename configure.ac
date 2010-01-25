@@ -8,7 +8,7 @@ AC_PREREQ([2.59])
 
 m4_define([haze_major_version], [0])
 m4_define([haze_minor_version], [3])
-m4_define([haze_micro_version], [2])
+m4_define([haze_micro_version], [3])
 m4_define([haze_nano_version], [0])
 
 m4_define([haze_base_version],
@@ -19,12 +19,23 @@ m4_define([haze_version],
                  [haze_base_version].[haze_nano_version])])
 
 AC_INIT([telepathy-haze], [haze_version],
-        [https://bugs.freedesktop.org/enter_bug.cgi?product=Telepathy&component=telepathy-haze])
+        [https://bugs.freedesktop.org/enter_bug.cgi?product=Telepathy&component=haze])
 
 AC_CONFIG_MACRO_DIR([m4])
 
+AC_CONFIG_AUX_DIR([build-aux])
 AM_INIT_AUTOMAKE([1.9 -Wno-portability])
-AM_CONFIG_HEADER(config.h)
+AM_CONFIG_HEADER([config.h])
+AC_CONFIG_FILES([Makefile
+		 src/Makefile
+		 data/Makefile
+		 m4/Makefile
+		 tests/Makefile
+		 tests/twisted/Makefile
+		 tools/Makefile
+                 ])
+
+m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES])
 
 AC_PROG_CC
 AC_PROG_CC_STDC
@@ -54,16 +65,8 @@ AC_ARG_ENABLE(leaky-request-stubs,
 AC_SUBST(ENABLE_LEAKY_REQUEST_STUBS)
 
 PKG_CHECK_MODULES(PURPLE,[purple >= 2.1.1])
-AC_SUBST(PURPLE_CFLAGS)
-AC_SUBST(PURPLE_LIBS)
-
-PKG_CHECK_MODULES(TP_GLIB,[telepathy-glib >= 0.7.21])
-AC_SUBST(TP_GLIB_CFLAGS)
-AC_SUBST(TP_GLIB_LIBS)
-
+PKG_CHECK_MODULES(TP_GLIB,[telepathy-glib >= 0.7.36])
 PKG_CHECK_MODULES(DBUS_GLIB,[dbus-glib-1 >= 0.73])
-AC_SUBST(DBUS_GLIB_CFLAGS)
-AC_SUBST(DBUS_GLIB_LIBS)
 
 AC_CHECK_LIB(purple, purple_dbus_uninit,
   [ AC_DEFINE(HAVE_PURPLE_DBUS_UNINIT, [],
@@ -91,15 +94,4 @@ AM_CONDITIONAL([WANT_TWISTED_TESTS], test false != "$TEST_PYTHON")
 #AC_SUBST(DBUS_SERVICES_DIR)
 #AC_DEFINE_UNQUOTED(DBUS_SERVICES_DIR, "$DBUS_SERVICES_DIR", [DBus services directory])
 
-SHAVE_INIT(.)
-
-AC_OUTPUT([Makefile
-           src/Makefile
-           data/Makefile
-           m4/Makefile
-	   tests/Makefile
-	   tests/twisted/Makefile
-	   tools/Makefile
-           shave
-           shave-libtool
-           ])
+AC_OUTPUT

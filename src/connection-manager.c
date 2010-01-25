@@ -27,12 +27,20 @@
 #include <libpurple/prpl.h>
 #include <libpurple/accountopt.h>
 
+#include <telepathy-glib/debug-sender.h>
+
 #include "connection-manager.h"
 #include "debug.h"
 
 G_DEFINE_TYPE(HazeConnectionManager,
     haze_connection_manager,
     TP_TYPE_BASE_CONNECTION_MANAGER)
+
+typedef struct _HazeConnectionManagerPrivate HazeConnectionManagerPrivate;
+struct _HazeConnectionManagerPrivate
+{
+    TpDebugSender *debug_sender;
+};
 
 /* For some protocols, removing the "prpl-" prefix from its name in libpurple
  * doesn't give the right name for Telepathy.  Other protocols need some
@@ -265,6 +273,14 @@ _translate_protocol_option (PurpleAccountOption *option,
     if (g_str_equal (paramspec->name, "server"))
         paramspec->filter = _param_filter_no_blanks;
 
+    /* There don't seem to be any secrets except for password at the moment
+     * (SILC's private-key is a filename, so its value is not actually secret).
+     * If more appear, e.g. http-proxy-password, this would be a good place to
+     * set the SECRET flag on them; for future-proofing I'll assume tha
+     * anything ending with -password is likely to be secret. */
+    if (g_str_has_suffix (paramspec->name, "-password"))
+        paramspec->flags |= TP_CONN_MGR_PARAM_FLAG_SECRET;
+
     return TRUE;
 }
 
@@ -280,7 +296,8 @@ _build_paramspecs (HazeProtocolInfo *hpi)
           (gpointer) "account", NULL };
     TpCMParamSpec password_spec =
         { "password", DBUS_TYPE_STRING_AS_STRING, G_TYPE_STRING,
-          TP_CONN_MGR_PARAM_FLAG_REQUIRED, NULL, 0, NULL, NULL,
+          TP_CONN_MGR_PARAM_FLAG_REQUIRED | TP_CONN_MGR_PARAM_FLAG_SECRET,
+          NULL, 0, NULL, NULL,
           (gpointer) "password", NULL };
 
     GArray *paramspecs = g_array_new (TRUE, TRUE, sizeof (TpCMParamSpec));
@@ -308,7 +325,7 @@ _build_paramspecs (HazeProtocolInfo *hpi)
     if (!(hpi->prpl_info->options & OPT_PROTO_NO_PASSWORD))
     {
         if (hpi->prpl_info->options & OPT_PROTO_PASSWORD_OPTIONAL)
-            password_spec.flags = 0;
+            password_spec.flags &= ~TP_CONN_MGR_PARAM_FLAG_REQUIRED;
         g_array_append_val (paramspecs, password_spec);
     }
 
@@ -506,20 +523,46 @@ static void _init_protocol_table (HazeConnectionManagerClass *klass)
 }
 
 static void
+_haze_cm_finalize (GObject *object)
+{
+    HazeConnectionManager *self = HAZE_CONNECTION_MANAGER (object);
+    HazeConnectionManagerPrivate *priv = self->priv;
+
+    if (priv->debug_sender != NULL)
+    {
+        g_object_unref (priv->debug_sender);
+        priv->debug_sender = NULL;
+    }
+}
+
+static void
 haze_connection_manager_class_init (HazeConnectionManagerClass *klass)
 {
     TpBaseConnectionManagerClass *base_class =
         (TpBaseConnectionManagerClass *)klass;
+    GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
     _init_protocol_table (klass);
+
+    object_class->finalize = _haze_cm_finalize;
 
     base_class->new_connection = _haze_connection_manager_new_connection;
     base_class->cm_dbus_name = "haze";
     base_class->protocol_params = get_protocols (klass);
+
+    g_type_class_add_private (klass, sizeof (HazeConnectionManagerPrivate));
 }
 
 static void
 haze_connection_manager_init (HazeConnectionManager *self)
 {
+    HazeConnectionManagerPrivate *priv = G_TYPE_INSTANCE_GET_PRIVATE (self,
+        HAZE_TYPE_CONNECTION_MANAGER, HazeConnectionManagerPrivate);
+
+    self->priv = priv;
+
+    priv->debug_sender = tp_debug_sender_dup ();
+    g_log_set_default_handler (tp_debug_sender_log_handler, G_LOG_DOMAIN);
+
     DEBUG ("Initializing (HazeConnectionManager *)%p", self);
 }
