@@ -8,7 +8,7 @@ AC_PREREQ([2.59])
 
 m4_define([haze_major_version], [0])
 m4_define([haze_minor_version], [3])
-m4_define([haze_micro_version], [3])
+m4_define([haze_micro_version], [4])
 m4_define([haze_nano_version], [0])
 
 m4_define([haze_base_version],
@@ -33,6 +33,7 @@ AC_CONFIG_FILES([Makefile
 		 tests/Makefile
 		 tests/twisted/Makefile
 		 tools/Makefile
+		 extensions/Makefile
                  ])
 
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES])
@@ -66,28 +67,55 @@ AC_SUBST(ENABLE_LEAKY_REQUEST_STUBS)
 
 PKG_CHECK_MODULES(PURPLE,[purple >= 2.1.1])
 PKG_CHECK_MODULES(TP_GLIB,[telepathy-glib >= 0.7.36])
+PKG_CHECK_MODULES(GLIB,[glib-2.0, gobject-2.0])
 PKG_CHECK_MODULES(DBUS_GLIB,[dbus-glib-1 >= 0.73])
+
+GLIB_GENMARSHAL=`$PKG_CONFIG --variable=glib_genmarshal glib-2.0`
+AC_SUBST(GLIB_GENMARSHAL)
 
 AC_CHECK_LIB(purple, purple_dbus_uninit,
   [ AC_DEFINE(HAVE_PURPLE_DBUS_UNINIT, [],
     [Define if purple_dbus_uninit is present in libpurple]) ],
   [], [$PURPLE_LIBS])
 
+dnl Check for code generation tools
+XSLTPROC=
+AC_CHECK_PROGS([XSLTPROC], [xsltproc])
+if test -z "$XSLTPROC"; then
+  AC_MSG_ERROR([xsltproc (from the libxslt source package) is required])
+fi
+
+AM_PATH_PYTHON([2.5])
+
 # Check for a Python >= 2.5 with Twisted, to run the tests
-AC_MSG_CHECKING([for Python >= 2.5 with Twisted and XMPP protocol support])
-for TEST_PYTHON in python2.5 python2.6 python; do
-  if $TEST_PYTHON -c "from sys import version_info; import dbus, dbus.mainloop.glib; raise SystemExit(version_info < (2, 5, 0, 'final', 0))" >/dev/null 2>&1; then
-    if $TEST_PYTHON -c "import twisted.words.xish.domish, twisted.words.protocols.jabber, twisted.internet.reactor" >/dev/null 2>&1; then
-      AC_MSG_RESULT([$TEST_PYTHON])
-      AM_CONDITIONAL([WANT_TWISTED_TESTS], true)
-      break
-    else
-      TEST_PYTHON=false
-    fi
-  fi
-done
+AC_MSG_CHECKING([for Python with Twisted and XMPP protocol support])
+if $PYTHON -c "import twisted.words.xish.domish, twisted.words.protocols.jabber, twisted.internet.reactor" >/dev/null 2>&1; then
+    TEST_PYTHON="$PYTHON"
+else
+    TEST_PYTHON=false
+fi
+AC_MSG_RESULT([$TEST_PYTHON])
 AC_SUBST(TEST_PYTHON)
 AM_CONDITIONAL([WANT_TWISTED_TESTS], test false != "$TEST_PYTHON")
+
+AC_MSG_CHECKING([for libpurple >= 2.7.0 (media support)])
+AC_ARG_ENABLE(media,
+  AC_HELP_STRING([--disable-media],[disable audio/video calls]),
+  [
+    AC_MSG_RESULT([disabled])
+    AM_CONDITIONAL([MEDIA_ENABLED], false)
+  ],[
+    PKG_CHECK_EXISTS([purple >= 2.7.0],
+      [
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(ENABLE_MEDIA, [], [Enable audio/video calls])
+        AM_CONDITIONAL([MEDIA_ENABLED], true)
+      ],[
+        AC_MSG_RESULT([no])
+        AM_CONDITIONAL([MEDIA_ENABLED], false)
+      ])
+  ])
+AC_SUBST(ENABLE_MEDIA)
 
 #AS_AC_EXPAND(DATADIR, $datadir)
 #DBUS_SERVICES_DIR="$DATADIR/dbus-1/services"

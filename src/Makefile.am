@@ -8,6 +8,21 @@ man_MANS = telepathy-haze.8
 EXTRA_DIST = telepathy-haze.8.in
 CLEANFILES = $(man_MANS)
 
+if MEDIA_ENABLED
+haze_media_sources = connection-capabilities.c \
+                     connection-capabilities.h \
+                     media-backend.c \
+                     media-backend.h \
+                     media-channel.c \
+                     media-channel.h \
+                     media-manager.c \
+                     media-manager.h \
+                     media-stream.c \
+                     media-stream.h
+else
+haze_media_sources =
+endif
+
 telepathy_haze_SOURCES = main.c \
                          defines.h \
                          debug.c \
@@ -20,6 +35,8 @@ telepathy_haze_SOURCES = main.c \
                          connection-avatars.h \
                          connection-presence.c \
                          connection-presence.h \
+                         connection-mail.h \
+                         connection-mail.c \
                          connection.c \
                          connection.h \
                          contact-list.c \
@@ -33,13 +50,19 @@ telepathy_haze_SOURCES = main.c \
                          notify.c \
                          notify.h \
                          request.c \
-                         request.h
+                         request.h \
+                         $(haze_media_sources)
+
+telepathy_haze_LDADD = $(top_builddir)/extensions/libhaze-extensions.la
 
 AM_CFLAGS = \
+	-I$(top_srcdir) \
+	-I$(top_builddir) \
 	-DG_LOG_DOMAIN=\"haze\" \
 	$(ERROR_CFLAGS) \
 	@PURPLE_CFLAGS@ \
 	@TP_GLIB_CFLAGS@ \
-	@DBUS_GLIB_CFLAGS@
+	@DBUS_GLIB_CFLAGS@ \
+	@GLIB_CFLAGS@
 
-AM_LDFLAGS = @PURPLE_LIBS@ @TP_GLIB_LIBS@ @DBUS_GLIB_CFLAGS@
+AM_LDFLAGS = @PURPLE_LIBS@ @TP_GLIB_LIBS@ @DBUS_GLIB_LIBS@ @GLIB_LIBS@
