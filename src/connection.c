@@ -19,6 +19,8 @@
  *
  */
 
+#include "config.h"
+
 #include <string.h>
 
 #include <telepathy-glib/dbus.h>
@@ -39,7 +41,13 @@
 #include "connection-presence.h"
 #include "connection-aliasing.h"
 #include "connection-avatars.h"
+#include "connection-mail.h"
 #include "contact-list-channel.h"
+#include "extensions/extensions.h"
+
+#ifdef ENABLE_MEDIA
+#include "connection-capabilities.h"
+#endif
 
 enum
 {
@@ -62,8 +70,14 @@ G_DEFINE_TYPE_WITH_CODE(HazeConnection,
         haze_connection_aliasing_iface_init);
     G_IMPLEMENT_INTERFACE (TP_TYPE_SVC_CONNECTION_INTERFACE_AVATARS,
         haze_connection_avatars_iface_init);
+#ifdef ENABLE_MEDIA
+    G_IMPLEMENT_INTERFACE (TP_TYPE_SVC_CONNECTION_INTERFACE_CAPABILITIES,
+        haze_connection_capabilities_iface_init);
+#endif
     G_IMPLEMENT_INTERFACE (TP_TYPE_SVC_CONNECTION_INTERFACE_CONTACTS,
         tp_contacts_mixin_iface_init);
+    G_IMPLEMENT_INTERFACE (HAZE_TYPE_SVC_CONNECTION_INTERFACE_MAIL_NOTIFICATION,
+        haze_connection_mail_iface_init);
     );
 
 typedef struct _HazeConnectionPrivate
@@ -348,6 +362,10 @@ _haze_connection_start_connecting (TpBaseConnection *base,
     tp_base_connection_change_status(base, TP_CONNECTION_STATUS_CONNECTING,
                                      TP_CONNECTION_STATUS_REASON_REQUESTED);
 
+    /* We systematically enable mail notification to avoid bugs in protocol
+     * like GMail and MySpace where you need to do an action before connecting
+     * to start receiving the notifications. */
+    purple_account_set_check_mail(self->account, TRUE);
     purple_account_set_enabled(self->account, UI_ID, TRUE);
     purple_account_connect(self->account);
 
@@ -413,6 +431,12 @@ _haze_connection_create_channel_managers (TpBaseConnection *base)
     self->im_factory = HAZE_IM_CHANNEL_FACTORY (
         g_object_new (HAZE_TYPE_IM_CHANNEL_FACTORY, "connection", self, NULL));
     g_ptr_array_add (channel_managers, self->im_factory);
+
+#ifdef ENABLE_MEDIA
+    self->media_manager = HAZE_MEDIA_MANAGER (
+        g_object_new (HAZE_TYPE_MEDIA_MANAGER, "connection", self, NULL));
+    g_ptr_array_add (channel_managers, self->media_manager);
+#endif
 
     self->contact_list = HAZE_CONTACT_LIST (
         g_object_new (HAZE_TYPE_CONTACT_LIST, "connection", self, NULL));
@@ -500,7 +524,11 @@ haze_connection_constructor (GType type,
 
     haze_connection_aliasing_init (object);
     haze_connection_avatars_init (object);
+#ifdef ENABLE_MEDIA
+    haze_connection_capabilities_init (object);
+#endif
     haze_connection_presence_init (object);
+    haze_connection_mail_init (object);
 
     return (GObject *)self;
 }
@@ -553,6 +581,9 @@ haze_connection_class_init (HazeConnectionClass *klass)
         TP_IFACE_CONNECTION_INTERFACE_REQUESTS,
         TP_IFACE_CONNECTION_INTERFACE_PRESENCE,
         TP_IFACE_CONNECTION_INTERFACE_SIMPLE_PRESENCE,
+#ifdef ENABLE_MEDIA
+        TP_IFACE_CONNECTION_INTERFACE_CAPABILITIES,
+#endif
         TP_IFACE_CONNECTION_INTERFACE_CONTACTS,
         /* TODO: This is a lie.  Not all protocols supported by libpurple
          *       actually have the concept of a user-settable alias, but
@@ -560,6 +591,21 @@ haze_connection_class_init (HazeConnectionClass *klass)
          */
         TP_IFACE_CONNECTION_INTERFACE_ALIASING,
         NULL };
+    static TpDBusPropertiesMixinPropImpl mail_props[] = {
+        { "MailNotificationFlags", NULL, NULL },
+        { "UnreadMailCount", NULL, NULL },
+        { "UnreadMails", NULL, NULL },
+        { "MailAddress", NULL, NULL },
+        { NULL }
+    };
+    static TpDBusPropertiesMixinIfaceImpl prop_interfaces[] = {
+        { HAZE_IFACE_CONNECTION_INTERFACE_MAIL_NOTIFICATION,
+            haze_connection_mail_properties_getter,
+            NULL,
+            mail_props,
+        },
+        { NULL }
+    };
 
     DEBUG ("Initializing (HazeConnectionClass *)%p", klass);
 
@@ -600,7 +646,9 @@ haze_connection_class_init (HazeConnectionClass *klass)
     g_object_class_install_property (object_class, PROP_PROTOCOL_INFO,
                                      param_spec);
 
-    tp_dbus_properties_mixin_class_init (object_class, 0);
+    klass->properties_class.interfaces = prop_interfaces;
+    tp_dbus_properties_mixin_class_init (object_class,
+        G_STRUCT_OFFSET (HazeConnectionClass, properties_class));
 
     tp_contacts_mixin_class_init (object_class,
         G_STRUCT_OFFSET (HazeConnectionClass, contacts_class));
@@ -608,6 +656,9 @@ haze_connection_class_init (HazeConnectionClass *klass)
     haze_connection_presence_class_init (object_class);
     haze_connection_aliasing_class_init (object_class);
     haze_connection_avatars_class_init (object_class);
+#ifdef ENABLE_MEDIA
+    haze_connection_capabilities_class_init (object_class);
+#endif
 }
 
 static void

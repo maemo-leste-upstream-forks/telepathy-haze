@@ -4,6 +4,9 @@
    purposes */
 #undef ENABLE_LEAKY_REQUEST_STUBS
 
+/* Enable audio/video calls */
+#undef ENABLE_MEDIA
+
 /* Define to 1 if you have the <dlfcn.h> header file. */
 #undef HAVE_DLFCN_H
 
