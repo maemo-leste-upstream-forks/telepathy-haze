@@ -1,8 +1,9 @@
 telepathy-haze (0.3.4-1) UNRELEASED; urgency=low
 
   * New upstream release.
+    + Links against libraries it uses. (Closes: #556487)
 
- -- Jonny Lamb <jonny@debian.org>  Fri, 05 Mar 2010 11:59:24 +0000
+ -- Jonny Lamb <jonny@debian.org>  Fri, 05 Mar 2010 12:00:45 +0000
 
 telepathy-haze (0.3.3-1) unstable; urgency=low
 
