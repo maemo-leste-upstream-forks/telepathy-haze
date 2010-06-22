@@ -3,8 +3,10 @@ telepathy-haze (0.3.5-1) UNRELEASED; urgency=low
   * New upstream release.
   * debian/control:
     + Upped Standards-Version. (no changes)
+    + Upped build-dep version on tp-glib and added versioned build-dep on
+      glib.
 
- -- Jonny Lamb <jonny@debian.org>  Tue, 22 Jun 2010 17:59:36 +0100
+ -- Jonny Lamb <jonny@debian.org>  Tue, 22 Jun 2010 18:00:41 +0100
 
 telepathy-haze (0.3.4-1) unstable; urgency=low
 
