@@ -9,9 +9,7 @@ EXTRA_DIST = telepathy-haze.8.in
 CLEANFILES = $(man_MANS)
 
 if MEDIA_ENABLED
-haze_media_sources = connection-capabilities.c \
-                     connection-capabilities.h \
-                     media-backend.c \
+haze_media_sources = media-backend.c \
                      media-backend.h \
                      media-channel.c \
                      media-channel.h \
@@ -33,6 +31,8 @@ telepathy_haze_SOURCES = main.c \
                          connection-aliasing.h \
                          connection-avatars.c \
                          connection-avatars.h \
+                         connection-capabilities.c \
+                         connection-capabilities.h \
                          connection-presence.c \
                          connection-presence.h \
                          connection-mail.h \
@@ -51,6 +51,8 @@ telepathy_haze_SOURCES = main.c \
                          notify.h \
                          request.c \
                          request.h \
+                         util.c \
+                         util.h \
                          $(haze_media_sources)
 
 telepathy_haze_LDADD = $(top_builddir)/extensions/libhaze-extensions.la

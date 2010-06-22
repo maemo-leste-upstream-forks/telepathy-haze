@@ -8,7 +8,7 @@ AC_PREREQ([2.59])
 
 m4_define([haze_major_version], [0])
 m4_define([haze_minor_version], [3])
-m4_define([haze_micro_version], [4])
+m4_define([haze_micro_version], [5])
 m4_define([haze_nano_version], [0])
 
 m4_define([haze_base_version],
@@ -66,8 +66,8 @@ AC_ARG_ENABLE(leaky-request-stubs,
 AC_SUBST(ENABLE_LEAKY_REQUEST_STUBS)
 
 PKG_CHECK_MODULES(PURPLE,[purple >= 2.1.1])
-PKG_CHECK_MODULES(TP_GLIB,[telepathy-glib >= 0.7.36])
-PKG_CHECK_MODULES(GLIB,[glib-2.0, gobject-2.0])
+PKG_CHECK_MODULES(TP_GLIB,[telepathy-glib >= 0.9.2])
+PKG_CHECK_MODULES(GLIB,[glib-2.0 >= 2.22, gobject-2.0])
 PKG_CHECK_MODULES(DBUS_GLIB,[dbus-glib-1 >= 0.73])
 
 GLIB_GENMARSHAL=`$PKG_CONFIG --variable=glib_genmarshal glib-2.0`
