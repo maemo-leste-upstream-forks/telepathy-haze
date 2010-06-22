@@ -123,6 +123,8 @@ PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
 PKG_CONFIG = @PKG_CONFIG@
+PKG_CONFIG_LIBDIR = @PKG_CONFIG_LIBDIR@
+PKG_CONFIG_PATH = @PKG_CONFIG_PATH@
 PURPLE_CFLAGS = @PURPLE_CFLAGS@
 PURPLE_LIBS = @PURPLE_LIBS@
 PYTHON = @PYTHON@
@@ -197,6 +199,7 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 TWISTED_TESTS = \
+	avatar-requirements.py \
 	connect/fail.py \
 	connect/success.py \
 	connect/twice-to-same-account.py \

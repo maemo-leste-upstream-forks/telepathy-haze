@@ -56,27 +56,27 @@ am__telepathy_haze_SOURCES_DIST = main.c defines.h debug.c debug.h \
 	connection-manager.c connection-manager.h \
 	connection-aliasing.c connection-aliasing.h \
 	connection-avatars.c connection-avatars.h \
+	connection-capabilities.c connection-capabilities.h \
 	connection-presence.c connection-presence.h connection-mail.h \
 	connection-mail.c connection.c connection.h contact-list.c \
 	contact-list.h contact-list-channel.c contact-list-channel.h \
 	im-channel.h im-channel.c im-channel-factory.c \
 	im-channel-factory.h notify.c notify.h request.c request.h \
-	connection-capabilities.c connection-capabilities.h \
-	media-backend.c media-backend.h media-channel.c \
+	util.c util.h media-backend.c media-backend.h media-channel.c \
 	media-channel.h media-manager.c media-manager.h media-stream.c \
 	media-stream.h
-@MEDIA_ENABLED_TRUE@am__objects_1 = connection-capabilities.$(OBJEXT) \
-@MEDIA_ENABLED_TRUE@	media-backend.$(OBJEXT) \
+@MEDIA_ENABLED_TRUE@am__objects_1 = media-backend.$(OBJEXT) \
 @MEDIA_ENABLED_TRUE@	media-channel.$(OBJEXT) \
 @MEDIA_ENABLED_TRUE@	media-manager.$(OBJEXT) \
 @MEDIA_ENABLED_TRUE@	media-stream.$(OBJEXT)
 am_telepathy_haze_OBJECTS = main.$(OBJEXT) debug.$(OBJEXT) \
 	connection-manager.$(OBJEXT) connection-aliasing.$(OBJEXT) \
-	connection-avatars.$(OBJEXT) connection-presence.$(OBJEXT) \
-	connection-mail.$(OBJEXT) connection.$(OBJEXT) \
-	contact-list.$(OBJEXT) contact-list-channel.$(OBJEXT) \
-	im-channel.$(OBJEXT) im-channel-factory.$(OBJEXT) \
-	notify.$(OBJEXT) request.$(OBJEXT) $(am__objects_1)
+	connection-avatars.$(OBJEXT) connection-capabilities.$(OBJEXT) \
+	connection-presence.$(OBJEXT) connection-mail.$(OBJEXT) \
+	connection.$(OBJEXT) contact-list.$(OBJEXT) \
+	contact-list-channel.$(OBJEXT) im-channel.$(OBJEXT) \
+	im-channel-factory.$(OBJEXT) notify.$(OBJEXT) \
+	request.$(OBJEXT) util.$(OBJEXT) $(am__objects_1)
 telepathy_haze_OBJECTS = $(am_telepathy_haze_OBJECTS)
 telepathy_haze_DEPENDENCIES =  \
 	$(top_builddir)/extensions/libhaze-extensions.la
@@ -201,6 +201,8 @@ PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
 PKG_CONFIG = @PKG_CONFIG@
+PKG_CONFIG_LIBDIR = @PKG_CONFIG_LIBDIR@
+PKG_CONFIG_PATH = @PKG_CONFIG_PATH@
 PURPLE_CFLAGS = @PURPLE_CFLAGS@
 PURPLE_LIBS = @PURPLE_LIBS@
 PYTHON = @PYTHON@
@@ -278,9 +280,7 @@ man_MANS = telepathy-haze.8
 EXTRA_DIST = telepathy-haze.8.in
 CLEANFILES = $(man_MANS)
 @MEDIA_ENABLED_FALSE@haze_media_sources = 
-@MEDIA_ENABLED_TRUE@haze_media_sources = connection-capabilities.c \
-@MEDIA_ENABLED_TRUE@                     connection-capabilities.h \
-@MEDIA_ENABLED_TRUE@                     media-backend.c \
+@MEDIA_ENABLED_TRUE@haze_media_sources = media-backend.c \
 @MEDIA_ENABLED_TRUE@                     media-backend.h \
 @MEDIA_ENABLED_TRUE@                     media-channel.c \
 @MEDIA_ENABLED_TRUE@                     media-channel.h \
@@ -299,6 +299,8 @@ telepathy_haze_SOURCES = main.c \
                          connection-aliasing.h \
                          connection-avatars.c \
                          connection-avatars.h \
+                         connection-capabilities.c \
+                         connection-capabilities.h \
                          connection-presence.c \
                          connection-presence.h \
                          connection-mail.h \
@@ -317,6 +319,8 @@ telepathy_haze_SOURCES = main.c \
                          notify.h \
                          request.c \
                          request.h \
+                         util.c \
+                         util.h \
                          $(haze_media_sources)
 
 telepathy_haze_LDADD = $(top_builddir)/extensions/libhaze-extensions.la
@@ -437,6 +441,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/media-stream.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/notify.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/request.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/util.Po@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(COMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
