@@ -8,7 +8,7 @@ AC_PREREQ([2.59])
 
 m4_define([haze_major_version], [0])
 m4_define([haze_minor_version], [3])
-m4_define([haze_micro_version], [5])
+m4_define([haze_micro_version], [6])
 m4_define([haze_nano_version], [0])
 
 m4_define([haze_base_version],
@@ -59,6 +59,8 @@ TP_COMPILER_WARNINGS([ERROR_CFLAGS], [test x$release = xno],
   [missing-field-initializers \
    unused-parameter])
 AC_SUBST(ERROR_CFLAGS)
+
+AC_CHECK_HEADERS_ONCE([libintl.h])
 
 AC_ARG_ENABLE(leaky-request-stubs,
   AC_HELP_STRING([--enable-leaky-request-stubs],[print debugging information when libpurple attempts to use the request API (warning: very leaky)]),
