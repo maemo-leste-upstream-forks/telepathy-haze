@@ -1,3 +1,16 @@
+telepathy-haze (0.4.0-1) unstable; urgency=low
+
+  * New upstream release
+  * Bump dependency on libpurple to 2.6.0 (mandatory), then to 2.7.0 (so we
+    always get support for VoIP calls)
+  * Stop using our local telepathy-haze manpage, which has been accepted
+    and improved upstream
+  * Stop overriding $bindir, since upstream installs to $libexecdir anyway
+  * Standards-Version: 3.9.1 (no changes needed)
+  * Explicitly set source format to 1.0
+
+ -- Simon McVittie <smcv@debian.org>  Thu, 05 Aug 2010 16:22:55 +0100
+
 telepathy-haze (0.3.6-1) unstable; urgency=low
 
   * New upstream release.

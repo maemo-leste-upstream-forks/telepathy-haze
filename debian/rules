@@ -13,19 +13,7 @@ common-binary-post-install-arch:: list-missing
 common-install-arch::
 	rm -rf debian/telepathy-haze/usr/share/telepathy/
 
-# Man page
-common-post-build-arch::
-	sed -e s!@libexecdir@!/usr/lib/telepathy! \
-		< debian/telepathy-haze.8.in \
-		> debian/telepathy-haze.8
-DEB_INSTALL_MANPAGES_telepathy-haze := debian/telepathy-haze.8
-
-clean::
-	-rm debian/telepathy-haze.8
-
-# Upstream releases are going to move CMs to libexecdir soon...
+# all CMs in Debian share a directory, to keep libexec tidy
 DEB_CONFIGURE_LIBEXECDIR := "\$${prefix}/lib/telepathy"
-# but haven't done so yet, so let's give Debian a head start
-DEB_CONFIGURE_EXTRA_FLAGS := --bindir=$(DEB_CONFIGURE_LIBEXECDIR)
 
 include $(CURDIR)/debian/update-patches.mk
