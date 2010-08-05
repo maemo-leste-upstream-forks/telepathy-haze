@@ -7,8 +7,8 @@ AC_PREREQ([2.59])
 #  set nano_version to 1
 
 m4_define([haze_major_version], [0])
-m4_define([haze_minor_version], [3])
-m4_define([haze_micro_version], [6])
+m4_define([haze_minor_version], [4])
+m4_define([haze_micro_version], [0])
 m4_define([haze_nano_version], [0])
 
 m4_define([haze_base_version],
@@ -19,7 +19,7 @@ m4_define([haze_version],
                  [haze_base_version].[haze_nano_version])])
 
 AC_INIT([telepathy-haze], [haze_version],
-        [https://bugs.freedesktop.org/enter_bug.cgi?product=Telepathy&component=haze])
+        [https://bugs.freedesktop.org/enter_bug.cgi?product=Telepathy&component=haze&version=0.4])
 
 AC_CONFIG_MACRO_DIR([m4])
 
@@ -42,6 +42,10 @@ AC_PROG_CC
 AC_PROG_CC_STDC
 AC_PROG_INSTALL
 AC_PROG_LIBTOOL
+
+COMPILER_OPTIMISATIONS
+COMPILER_COVERAGE
+LINKER_OPTIMISATIONS
 
 ifelse(haze_nano_version, 0, [release=yes], [release=no])
 TP_COMPILER_WARNINGS([ERROR_CFLAGS], [test x$release = xno],
@@ -67,10 +71,38 @@ AC_ARG_ENABLE(leaky-request-stubs,
   AC_DEFINE(ENABLE_LEAKY_REQUEST_STUBS, [], [Enable the leaky stub implementation of the request API for debugging purposes]))
 AC_SUBST(ENABLE_LEAKY_REQUEST_STUBS)
 
-PKG_CHECK_MODULES(PURPLE,[purple >= 2.1.1])
-PKG_CHECK_MODULES(TP_GLIB,[telepathy-glib >= 0.9.2])
-PKG_CHECK_MODULES(GLIB,[glib-2.0 >= 2.22, gobject-2.0])
+PKG_CHECK_MODULES(PURPLE,[purple >= 2.6])
+PKG_CHECK_MODULES(TP_GLIB,[telepathy-glib >= 0.8.1])
+PKG_CHECK_MODULES(GLIB,[glib-2.0 >= 2.20, gobject-2.0])
 PKG_CHECK_MODULES(DBUS_GLIB,[dbus-glib-1 >= 0.73])
+
+AC_ARG_ENABLE([mail-notification],
+  AC_HELP_STRING([--enable-mail-notification],[enable draft mail notification API]),
+  [enable_mail_notification="$enableval"],
+  [enable_mail_notification=auto])
+
+case "$enable_mail_notification" in
+	yes)
+		PKG_CHECK_MODULES([TP_GLIB_FOR_MAIL_NOTIFICATION],
+				  [telepathy-glib >= 0.9.2, glib-2.0 >= 2.22])
+		;;
+	no)
+		;;
+	*)
+		PKG_CHECK_MODULES([TP_GLIB_FOR_MAIL_NOTIFICATION],
+			[telepathy-glib >= 0.9.2, glib-2.0 >= 2.22],
+			[enable_mail_notification=yes],
+			[enable_mail_notification=no])
+		;;
+esac
+
+AM_CONDITIONAL([ENABLE_MAIL_NOTIFICATION],
+	[test "x$enable_mail_notification" = xyes])
+
+if test "x$enable_mail_notification" = xyes; then
+	AC_DEFINE([ENABLE_MAIL_NOTIFICATION], [1],
+		[Define if your telepathy-glib is new enough])
+fi
 
 GLIB_GENMARSHAL=`$PKG_CONFIG --variable=glib_genmarshal glib-2.0`
 AC_SUBST(GLIB_GENMARSHAL)
@@ -107,7 +139,7 @@ AC_ARG_ENABLE(media,
     AC_MSG_RESULT([disabled])
     AM_CONDITIONAL([MEDIA_ENABLED], false)
   ],[
-    PKG_CHECK_EXISTS([purple >= 2.7.0],
+    PKG_CHECK_EXISTS([purple >= 2.7.0, glib-2.0 >= 2.22],
       [
         AC_MSG_RESULT([yes])
         AC_DEFINE(ENABLE_MEDIA, [], [Enable audio/video calls])

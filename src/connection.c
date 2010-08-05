@@ -41,11 +41,14 @@
 #include "connection-presence.h"
 #include "connection-aliasing.h"
 #include "connection-avatars.h"
-#include "connection-mail.h"
 #include "contact-list-channel.h"
 #include "extensions/extensions.h"
 
 #include "connection-capabilities.h"
+
+#ifdef ENABLE_MAIL_NOTIFICATION
+#   include "connection-mail.h"
+#endif
 
 #ifdef HAVE_LIBINTL_H
 #   include <libintl.h>
@@ -79,8 +82,10 @@ G_DEFINE_TYPE_WITH_CODE(HazeConnection,
         haze_connection_capabilities_iface_init);
     G_IMPLEMENT_INTERFACE (TP_TYPE_SVC_CONNECTION_INTERFACE_CONTACTS,
         tp_contacts_mixin_iface_init);
+#ifdef ENABLE_MAIL_NOTIFICATION
     G_IMPLEMENT_INTERFACE (HAZE_TYPE_SVC_CONNECTION_INTERFACE_MAIL_NOTIFICATION,
         haze_connection_mail_iface_init);
+#endif
     );
 
 struct _HazeConnectionPrivate
@@ -121,7 +126,6 @@ connected_cb (PurpleConnection *pc)
         TP_CONNECTION_STATUS_REASON_REQUESTED);
 }
 
-#if PURPLE_VERSION_CHECK(2,3,0)
 static void
 haze_report_disconnect_reason (PurpleConnection *gc,
                                PurpleConnectionError reason,
@@ -198,7 +202,6 @@ haze_report_disconnect_reason (PurpleConnection *gc,
     tp_base_connection_change_status (base_conn,
             TP_CONNECTION_STATUS_DISCONNECTED, tp_reason);
 }
-#endif
 
 static gboolean
 idle_finish_shutdown (gpointer data)
@@ -219,17 +222,11 @@ disconnected_cb (PurpleConnection *pc)
 
     if(base_conn->status != TP_CONNECTION_STATUS_DISCONNECTED)
     {
+        /* Because we have report_disconnect_reason, if status is not already
+         * DISCONNECTED, we know that it was requested. */
         tp_base_connection_change_status (base_conn,
             TP_CONNECTION_STATUS_DISCONNECTED,
-/* If we have report_disconnect_reason, then if status is not already
- * DISCONNECTED we know that it was requested.  If not, we have no idea.
- */
-#if PURPLE_VERSION_CHECK(2,3,0)
-            TP_CONNECTION_STATUS_REASON_REQUESTED
-#else
-            TP_CONNECTION_STATUS_REASON_NONE_SPECIFIED
-#endif
-            );
+            TP_CONNECTION_STATUS_REASON_REQUESTED);
 
     }
 
@@ -312,35 +309,30 @@ set_option (
     const PurpleAccountOption *option,
     GHashTable *params)
 {
-    GValue *value = g_hash_table_lookup (params, option->pref_name);
+  if (g_hash_table_lookup (params, option->pref_name) == NULL)
+    return;
 
-    if (!value)
-        return;
-
-    switch (option->type)
+  switch (option->type)
     {
-        case PURPLE_PREF_BOOLEAN:
-            g_assert (G_VALUE_TYPE (value) == G_TYPE_BOOLEAN);
-            purple_account_set_bool (account, option->pref_name,
-                g_value_get_boolean (value));
-            break;
-        case PURPLE_PREF_INT:
-            g_assert (G_VALUE_TYPE (value) == G_TYPE_INT);
-            purple_account_set_int (account, option->pref_name,
-                g_value_get_int (value));
-            break;
-        case PURPLE_PREF_STRING:
-        case PURPLE_PREF_STRING_LIST:
-            g_assert (G_VALUE_TYPE (value) == G_TYPE_STRING);
-            purple_account_set_string (account, option->pref_name,
-                g_value_get_string (value));
-            break;
-        default:
-            g_warning ("option '%s' has unhandled type %u",
-                option->pref_name, option->type);
+    case PURPLE_PREF_BOOLEAN:
+      purple_account_set_bool (account, option->pref_name,
+          tp_asv_get_boolean (params, option->pref_name, NULL));
+      break;
+    case PURPLE_PREF_INT:
+      purple_account_set_int (account, option->pref_name,
+          tp_asv_get_int32 (params, option->pref_name, NULL));
+      break;
+    case PURPLE_PREF_STRING:
+    case PURPLE_PREF_STRING_LIST:
+      purple_account_set_string (account, option->pref_name,
+          tp_asv_get_string (params, option->pref_name));
+      break;
+    default:
+      g_warning ("option '%s' has unhandled type %u",
+          option->pref_name, option->type);
     }
 
-    g_hash_table_remove (params, option->pref_name);
+  g_hash_table_remove (params, option->pref_name);
 }
 
 /**
@@ -417,10 +409,13 @@ _haze_connection_start_connecting (TpBaseConnection *base,
     tp_base_connection_change_status(base, TP_CONNECTION_STATUS_CONNECTING,
                                      TP_CONNECTION_STATUS_REASON_REQUESTED);
 
+#ifdef ENABLE_MAIL_NOTIFICATION
     /* We systematically enable mail notification to avoid bugs in protocol
      * like GMail and MySpace where you need to do an action before connecting
      * to start receiving the notifications. */
     purple_account_set_check_mail(self->account, TRUE);
+#endif
+
     purple_account_set_enabled(self->account, UI_ID, TRUE);
     purple_account_connect(self->account);
 
@@ -587,7 +582,10 @@ haze_connection_constructor (GType type,
     haze_connection_avatars_init (object);
     haze_connection_capabilities_init (object);
     haze_connection_presence_init (object);
+
+#ifdef ENABLE_MAIL_NOTIFICATION
     haze_connection_mail_init (object);
+#endif
 
     return (GObject *)self;
 }
@@ -648,6 +646,7 @@ haze_connection_class_init (HazeConnectionClass *klass)
          */
         TP_IFACE_CONNECTION_INTERFACE_ALIASING,
         NULL };
+#ifdef ENABLE_MAIL_NOTIFICATION
     static TpDBusPropertiesMixinPropImpl mail_props[] = {
         { "MailNotificationFlags", NULL, NULL },
         { "UnreadMailCount", NULL, NULL },
@@ -655,16 +654,19 @@ haze_connection_class_init (HazeConnectionClass *klass)
         { "MailAddress", NULL, NULL },
         { NULL }
     };
+#endif
     static TpDBusPropertiesMixinIfaceImpl prop_interfaces[] = {
         { TP_IFACE_CONNECTION_INTERFACE_AVATARS,
             haze_connection_avatars_properties_getter,
             NULL,
             NULL },     /* initialized a bit later */
+#ifdef ENABLE_MAIL_NOTIFICATION
         { HAZE_IFACE_CONNECTION_INTERFACE_MAIL_NOTIFICATION,
             haze_connection_mail_properties_getter,
             NULL,
             mail_props,
         },
+#endif
         { NULL }
     };
 
@@ -755,11 +757,7 @@ connection_ui_ops =
     NULL,            /* report_disconnect */
     NULL,            /* network_connected */
     NULL,            /* network_disconnected */
-#if PURPLE_VERSION_CHECK(2,3,0)
     haze_report_disconnect_reason, /* report_disconnect_reason */
-#else
-    NULL, /* _purple_reserved0 */
-#endif
 
     NULL, /* _purple_reserved1 */
     NULL, /* _purple_reserved2 */
