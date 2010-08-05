@@ -266,8 +266,22 @@ _translate_protocol_option (PurpleAccountOption *option,
                 purple_account_option_get_default_bool (option));
             break;
         case PURPLE_PREF_INT:
-            paramspec->dtype = DBUS_TYPE_INT32_AS_STRING;
-            paramspec->gtype = G_TYPE_INT;
+            /* The spec decrees that ports should be uint16, and people get
+             * very upset if they're not.  I suppose technically there could be
+             * int parameters whose names end in "port" which aren't meant to
+             * be unsigned?
+             */
+            if (g_str_has_suffix (name, "port"))
+              {
+                paramspec->dtype = DBUS_TYPE_UINT16_AS_STRING;
+                paramspec->gtype = G_TYPE_UINT;
+              }
+            else
+              {
+                paramspec->dtype = DBUS_TYPE_INT32_AS_STRING;
+                paramspec->gtype = G_TYPE_INT;
+              }
+
             paramspec->flags |= TP_CONN_MGR_PARAM_FLAG_HAS_DEFAULT;
             paramspec->def = GINT_TO_POINTER (
                 purple_account_option_get_default_int (option));
@@ -552,12 +566,19 @@ static void
 _haze_cm_finalize (GObject *object)
 {
     HazeConnectionManager *self = HAZE_CONNECTION_MANAGER (object);
+    void (*chain_up) (GObject *) =
+      G_OBJECT_CLASS (haze_connection_manager_parent_class)->finalize;
     HazeConnectionManagerPrivate *priv = self->priv;
 
     if (priv->debug_sender != NULL)
     {
         g_object_unref (priv->debug_sender);
         priv->debug_sender = NULL;
+    }
+
+    if (chain_up != NULL)
+    {
+        chain_up (object);
     }
 }
 
