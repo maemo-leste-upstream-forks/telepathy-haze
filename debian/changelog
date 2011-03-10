@@ -3,8 +3,10 @@ telepathy-haze (0.4.0-2) UNRELEASED; urgency=low
   * debian/control: Fix typo in short description. Thanks to "Ronny
     Cardona (Rcart)" <rcart1019@gmail.com> for the patch. (Closes:
     #614699)
+  * debian/control: Title case "Telepathy". Thanks to William Joseph
+    Thompson for absolutely nothing.
 
- -- Jonny Lamb <jonny@debian.org>  Thu, 10 Mar 2011 15:46:23 +0000
+ -- Jonny Lamb <jonny@debian.org>  Thu, 10 Mar 2011 15:47:29 +0000
 
 telepathy-haze (0.4.0-1) unstable; urgency=low
 
