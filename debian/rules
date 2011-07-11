@@ -9,10 +9,6 @@ include /usr/share/cdbs/1/rules/simple-patchsys.mk
 include /usr/share/cdbs/1/rules/utils.mk
 common-binary-post-install-arch:: list-missing
 
-#Don't ship .manager file
-common-install-arch::
-	rm -rf debian/telepathy-haze/usr/share/telepathy/
-
 # all CMs in Debian share a directory, to keep libexec tidy
 DEB_CONFIGURE_LIBEXECDIR := "\$${prefix}/lib/telepathy"
 

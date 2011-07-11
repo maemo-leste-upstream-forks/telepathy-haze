@@ -13,8 +13,10 @@ telepathy-haze (0.5.0-1) UNRELEASED; urgency=low
   * debian/control:
     - Bump libtelepathy-glib-dev build-dependency
     - Add python as Build-dependency (Closes: #625166)
+  * debian/rules:
+    - Do not try to delete .manager file, upstream doesn't ship it anymore
 
- -- Laurent Bigonville <bigon@debian.org>  Mon, 11 Jul 2011 20:06:58 +0200
+ -- Laurent Bigonville <bigon@debian.org>  Mon, 11 Jul 2011 20:11:05 +0200
 
 telepathy-haze (0.4.0-1) unstable; urgency=low
 
