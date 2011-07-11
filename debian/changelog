@@ -10,8 +10,10 @@ telepathy-haze (0.5.0-1) UNRELEASED; urgency=low
   [ Laurent Bigonville ]
   * New upstream release
     - Add initial contacts blocking support (Closes: #627251)
+  * debian/control:
+    - Bump libtelepathy-glib-dev build-dependency
 
- -- Laurent Bigonville <bigon@debian.org>  Mon, 11 Jul 2011 20:01:26 +0200
+ -- Laurent Bigonville <bigon@debian.org>  Mon, 11 Jul 2011 20:03:53 +0200
 
 telepathy-haze (0.4.0-1) unstable; urgency=low
 
