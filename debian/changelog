@@ -1,4 +1,4 @@
-telepathy-haze (0.5.0-1) UNRELEASED; urgency=low
+telepathy-haze (0.5.0-1) unstable; urgency=low
 
   [ Jonny Lamb ]
   * debian/control: Fix typo in short description. Thanks to "Ronny
@@ -19,7 +19,7 @@ telepathy-haze (0.5.0-1) UNRELEASED; urgency=low
     - Do not try to delete .manager file, upstream doesn't ship it anymore
   * Switch to dpkg-source 3.0 (quilt) format
 
- -- Laurent Bigonville <bigon@debian.org>  Mon, 11 Jul 2011 20:24:36 +0200
+ -- Laurent Bigonville <bigon@debian.org>  Mon, 11 Jul 2011 20:34:40 +0200
 
 telepathy-haze (0.4.0-1) unstable; urgency=low
 
