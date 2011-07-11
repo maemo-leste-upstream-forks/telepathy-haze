@@ -35,8 +35,7 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 subdir = data
-DIST_COMMON = $(dist_manager_DATA) $(srcdir)/Makefile.am \
-	$(srcdir)/Makefile.in
+DIST_COMMON = $(srcdir)/Makefile.am $(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/as-compiler-flag.m4 \
 	$(top_srcdir)/m4/compiler.m4 $(top_srcdir)/m4/libtool.m4 \
@@ -80,8 +79,8 @@ am__nobase_list = $(am__nobase_strip_setup); \
 am__base_list = \
   sed '$$!N;$$!N;$$!N;$$!N;$$!N;$$!N;$$!N;s/\n/ /g' | \
   sed '$$!N;$$!N;$$!N;$$!N;s/\n/ /g'
-am__installdirs = "$(DESTDIR)$(managerdir)" "$(DESTDIR)$(servicedir)"
-DATA = $(dist_manager_DATA) $(service_DATA)
+am__installdirs = "$(DESTDIR)$(servicedir)"
+DATA = $(service_DATA)
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 ACLOCAL = @ACLOCAL@
 AMTAR = @AMTAR@
@@ -101,6 +100,7 @@ DBUS_GLIB_CFLAGS = @DBUS_GLIB_CFLAGS@
 DBUS_GLIB_LIBS = @DBUS_GLIB_LIBS@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
+DLLTOOL = @DLLTOOL@
 DSYMUTIL = @DSYMUTIL@
 DUMPBIN = @DUMPBIN@
 ECHO_C = @ECHO_C@
@@ -130,6 +130,7 @@ LIPO = @LIPO@
 LN_S = @LN_S@
 LTLIBOBJS = @LTLIBOBJS@
 MAKEINFO = @MAKEINFO@
+MANIFEST_TOOL = @MANIFEST_TOOL@
 MKDIR_P = @MKDIR_P@
 NM = @NM@
 NMEDIT = @NMEDIT@
@@ -162,8 +163,6 @@ SHELL = @SHELL@
 STRIP = @STRIP@
 TEST_PYTHON = @TEST_PYTHON@
 TP_GLIB_CFLAGS = @TP_GLIB_CFLAGS@
-TP_GLIB_FOR_MAIL_NOTIFICATION_CFLAGS = @TP_GLIB_FOR_MAIL_NOTIFICATION_CFLAGS@
-TP_GLIB_FOR_MAIL_NOTIFICATION_LIBS = @TP_GLIB_FOR_MAIL_NOTIFICATION_LIBS@
 TP_GLIB_LIBS = @TP_GLIB_LIBS@
 VERSION = @VERSION@
 XSLTPROC = @XSLTPROC@
@@ -171,6 +170,7 @@ abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
 abs_top_srcdir = @abs_top_srcdir@
+ac_ct_AR = @ac_ct_AR@
 ac_ct_CC = @ac_ct_CC@
 ac_ct_DUMPBIN = @ac_ct_DUMPBIN@
 am__include = @am__include@
@@ -203,7 +203,6 @@ libdir = @libdir@
 libexecdir = @libexecdir@
 localedir = @localedir@
 localstatedir = @localstatedir@
-lt_ECHO = @lt_ECHO@
 mandir = @mandir@
 mkdir_p = @mkdir_p@
 oldincludedir = @oldincludedir@
@@ -223,10 +222,6 @@ target_alias = @target_alias@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
-
-# Telepathy manager file
-managerdir = $(datadir)/telepathy/managers
-dist_manager_DATA = haze.manager
 
 # Dbus service file
 servicedir = $(datadir)/dbus-1/services
@@ -274,26 +269,6 @@ mostlyclean-libtool:
 
 clean-libtool:
 	-rm -rf .libs _libs
-install-dist_managerDATA: $(dist_manager_DATA)
-	@$(NORMAL_INSTALL)
-	test -z "$(managerdir)" || $(MKDIR_P) "$(DESTDIR)$(managerdir)"
-	@list='$(dist_manager_DATA)'; test -n "$(managerdir)" || list=; \
-	for p in $$list; do \
-	  if test -f "$$p"; then d=; else d="$(srcdir)/"; fi; \
-	  echo "$$d$$p"; \
-	done | $(am__base_list) | \
-	while read files; do \
-	  echo " $(INSTALL_DATA) $$files '$(DESTDIR)$(managerdir)'"; \
-	  $(INSTALL_DATA) $$files "$(DESTDIR)$(managerdir)" || exit $$?; \
-	done
-
-uninstall-dist_managerDATA:
-	@$(NORMAL_UNINSTALL)
-	@list='$(dist_manager_DATA)'; test -n "$(managerdir)" || list=; \
-	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
-	test -n "$$files" || exit 0; \
-	echo " ( cd '$(DESTDIR)$(managerdir)' && rm -f" $$files ")"; \
-	cd "$(DESTDIR)$(managerdir)" && rm -f $$files
 install-serviceDATA: $(service_DATA)
 	@$(NORMAL_INSTALL)
 	test -z "$(servicedir)" || $(MKDIR_P) "$(DESTDIR)$(servicedir)"
@@ -355,7 +330,7 @@ check-am: all-am
 check: check-am
 all-am: Makefile $(DATA)
 installdirs:
-	for dir in "$(DESTDIR)$(managerdir)" "$(DESTDIR)$(servicedir)"; do \
+	for dir in "$(DESTDIR)$(servicedir)"; do \
 	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
 	done
 install: install-am
@@ -404,7 +379,7 @@ info: info-am
 
 info-am:
 
-install-data-am: install-dist_managerDATA install-serviceDATA
+install-data-am: install-serviceDATA
 
 install-dvi: install-dvi-am
 
@@ -448,22 +423,21 @@ ps: ps-am
 
 ps-am:
 
-uninstall-am: uninstall-dist_managerDATA uninstall-serviceDATA
+uninstall-am: uninstall-serviceDATA
 
 .MAKE: install-am install-strip
 
 .PHONY: all all-am check check-am clean clean-generic clean-libtool \
 	distclean distclean-generic distclean-libtool distdir dvi \
 	dvi-am html html-am info info-am install install-am \
-	install-data install-data-am install-dist_managerDATA \
-	install-dvi install-dvi-am install-exec install-exec-am \
-	install-html install-html-am install-info install-info-am \
-	install-man install-pdf install-pdf-am install-ps \
-	install-ps-am install-serviceDATA install-strip installcheck \
-	installcheck-am installdirs maintainer-clean \
-	maintainer-clean-generic mostlyclean mostlyclean-generic \
-	mostlyclean-libtool pdf pdf-am ps ps-am uninstall uninstall-am \
-	uninstall-dist_managerDATA uninstall-serviceDATA
+	install-data install-data-am install-dvi install-dvi-am \
+	install-exec install-exec-am install-html install-html-am \
+	install-info install-info-am install-man install-pdf \
+	install-pdf-am install-ps install-ps-am install-serviceDATA \
+	install-strip installcheck installcheck-am installdirs \
+	maintainer-clean maintainer-clean-generic mostlyclean \
+	mostlyclean-generic mostlyclean-libtool pdf pdf-am ps ps-am \
+	uninstall uninstall-am uninstall-serviceDATA
 
 
 # Rule to make the service file with libexecdir expanded

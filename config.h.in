@@ -4,9 +4,6 @@
    purposes */
 #undef ENABLE_LEAKY_REQUEST_STUBS
 
-/* Define if your telepathy-glib is new enough */
-#undef ENABLE_MAIL_NOTIFICATION
-
 /* Enable audio/video calls */
 #undef ENABLE_MEDIA
 

@@ -497,6 +497,13 @@ haze_im_channel_get_property (GObject    *object,
                     TP_IFACE_CHANNEL, "InitiatorID",
                     TP_IFACE_CHANNEL, "Requested",
                     TP_IFACE_CHANNEL, "Interfaces",
+                    TP_IFACE_CHANNEL_INTERFACE_MESSAGES,
+                        "MessagePartSupportFlags",
+                    TP_IFACE_CHANNEL_INTERFACE_MESSAGES,
+                        "DeliveryReportingSupport",
+                    TP_IFACE_CHANNEL_INTERFACE_MESSAGES,
+                        "SupportedContentTypes",
+                    TP_IFACE_CHANNEL_INTERFACE_MESSAGES, "MessageTypes",
                     NULL));
             break;
         default:
@@ -564,7 +571,7 @@ haze_im_channel_constructor (GType type, guint n_props,
     HazeIMChannelPrivate *priv;
     TpHandleRepoIface *contact_handles;
     TpBaseConnection *conn;
-    DBusGConnection *bus;
+    TpDBusDaemon *bus;
 
     obj = G_OBJECT_CLASS (haze_im_channel_parent_class)->
         constructor (type, n_props, props);
@@ -583,8 +590,8 @@ haze_im_channel_constructor (GType type, guint n_props,
     tp_message_mixin_implement_sending (obj, haze_im_channel_send, 3,
         supported_message_types, 0, 0, supported_content_types);
 
-    bus = tp_get_bus ();
-    dbus_g_connection_register_g_object (bus, priv->object_path, obj);
+    bus = tp_base_connection_get_dbus_daemon (conn);
+    tp_dbus_daemon_register_object (bus, priv->object_path, obj);
 
     priv->closed = FALSE;
     priv->dispose_has_run = FALSE;
@@ -768,9 +775,9 @@ _make_message (HazeIMChannel *self,
    *        or the test are broken.
    */
   if (flags & PURPLE_MESSAGE_DELAYED || mtime != now)
-    tp_message_set_uint64 (message, 0, "message-sent", mtime);
+    tp_message_set_int64 (message, 0, "message-sent", mtime);
 
-  tp_message_set_uint64 (message, 0, "message-received", now);
+  tp_message_set_int64 (message, 0, "message-received", now);
 
   /* Body */
   tp_message_set_string (message, 1, "content-type", "text/plain");

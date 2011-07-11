@@ -8,7 +8,9 @@ EXTRA_DIST = \
     glib-signals-marshal-gen.py \
     identity.xsl \
     libglibcodegen.py \
-    libtpcodegen.py
+    libtpcodegen.py \
+    make-release-mail.py \
+    telepathy.am
 
 CLEANFILES = *.pyc *.pyo
 
