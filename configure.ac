@@ -7,7 +7,7 @@ AC_PREREQ([2.59])
 #  set nano_version to 1
 
 m4_define([haze_major_version], [0])
-m4_define([haze_minor_version], [4])
+m4_define([haze_minor_version], [5])
 m4_define([haze_micro_version], [0])
 m4_define([haze_nano_version], [0])
 
@@ -19,7 +19,7 @@ m4_define([haze_version],
                  [haze_base_version].[haze_nano_version])])
 
 AC_INIT([telepathy-haze], [haze_version],
-        [https://bugs.freedesktop.org/enter_bug.cgi?product=Telepathy&component=haze&version=0.4])
+        [https://bugs.freedesktop.org/enter_bug.cgi?product=Telepathy&component=haze])
 
 AC_CONFIG_MACRO_DIR([m4])
 
@@ -71,38 +71,10 @@ AC_ARG_ENABLE(leaky-request-stubs,
   AC_DEFINE(ENABLE_LEAKY_REQUEST_STUBS, [], [Enable the leaky stub implementation of the request API for debugging purposes]))
 AC_SUBST(ENABLE_LEAKY_REQUEST_STUBS)
 
-PKG_CHECK_MODULES(PURPLE,[purple >= 2.6])
-PKG_CHECK_MODULES(TP_GLIB,[telepathy-glib >= 0.8.1])
-PKG_CHECK_MODULES(GLIB,[glib-2.0 >= 2.20, gobject-2.0])
+PKG_CHECK_MODULES(PURPLE,[purple >= 2.7])
+PKG_CHECK_MODULES(TP_GLIB,[telepathy-glib >= 0.13.9])
+PKG_CHECK_MODULES(GLIB,[glib-2.0 >= 2.22, gobject-2.0, gio-2.0])
 PKG_CHECK_MODULES(DBUS_GLIB,[dbus-glib-1 >= 0.73])
-
-AC_ARG_ENABLE([mail-notification],
-  AC_HELP_STRING([--enable-mail-notification],[enable draft mail notification API]),
-  [enable_mail_notification="$enableval"],
-  [enable_mail_notification=auto])
-
-case "$enable_mail_notification" in
-	yes)
-		PKG_CHECK_MODULES([TP_GLIB_FOR_MAIL_NOTIFICATION],
-				  [telepathy-glib >= 0.9.2, glib-2.0 >= 2.22])
-		;;
-	no)
-		;;
-	*)
-		PKG_CHECK_MODULES([TP_GLIB_FOR_MAIL_NOTIFICATION],
-			[telepathy-glib >= 0.9.2, glib-2.0 >= 2.22],
-			[enable_mail_notification=yes],
-			[enable_mail_notification=no])
-		;;
-esac
-
-AM_CONDITIONAL([ENABLE_MAIL_NOTIFICATION],
-	[test "x$enable_mail_notification" = xyes])
-
-if test "x$enable_mail_notification" = xyes; then
-	AC_DEFINE([ENABLE_MAIL_NOTIFICATION], [1],
-		[Define if your telepathy-glib is new enough])
-fi
 
 GLIB_GENMARSHAL=`$PKG_CONFIG --variable=glib_genmarshal glib-2.0`
 AC_SUBST(GLIB_GENMARSHAL)
@@ -132,22 +104,13 @@ AC_MSG_RESULT([$TEST_PYTHON])
 AC_SUBST(TEST_PYTHON)
 AM_CONDITIONAL([WANT_TWISTED_TESTS], test false != "$TEST_PYTHON")
 
-AC_MSG_CHECKING([for libpurple >= 2.7.0 (media support)])
 AC_ARG_ENABLE(media,
   AC_HELP_STRING([--disable-media],[disable audio/video calls]),
   [
-    AC_MSG_RESULT([disabled])
     AM_CONDITIONAL([MEDIA_ENABLED], false)
   ],[
-    PKG_CHECK_EXISTS([purple >= 2.7.0, glib-2.0 >= 2.22],
-      [
-        AC_MSG_RESULT([yes])
-        AC_DEFINE(ENABLE_MEDIA, [], [Enable audio/video calls])
-        AM_CONDITIONAL([MEDIA_ENABLED], true)
-      ],[
-        AC_MSG_RESULT([no])
-        AM_CONDITIONAL([MEDIA_ENABLED], false)
-      ])
+    AC_DEFINE(ENABLE_MEDIA, [], [Enable audio/video calls])
+    AM_CONDITIONAL([MEDIA_ENABLED], true)
   ])
 AC_SUBST(ENABLE_MEDIA)
 

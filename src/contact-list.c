@@ -21,40 +21,78 @@
 
 #include <string.h>
 
-#include <telepathy-glib/channel-manager.h>
 #include <telepathy-glib/dbus.h>
+#include <telepathy-glib/gtypes.h>
 #include <telepathy-glib/interfaces.h>
 #include <telepathy-glib/intset.h>
 
 #include "connection.h"
 #include "contact-list.h"
-#include "contact-list-channel.h"
 #include "debug.h"
+
+typedef struct _PublishRequestData PublishRequestData;
+
+/** PublishRequestData:
+ *
+ *  Keeps track of the relevant callbacks to approve or deny a contact's publish
+ *  request.
+ */
+struct _PublishRequestData {
+    HazeContactList *self;
+    TpHandle handle;
+    gchar *message;
+
+    PurpleAccountRequestAuthorizationCb allow;
+    PurpleAccountRequestAuthorizationCb deny;
+    gpointer data;
+};
+
+
+static PublishRequestData *
+publish_request_data_new (void)
+{
+    return g_slice_new0 (PublishRequestData);
+}
+
+static void
+publish_request_data_free (PublishRequestData *prd)
+{
+    g_free (prd->message);
+    g_slice_free (PublishRequestData, prd);
+}
 
 struct _HazeContactListPrivate {
     HazeConnection *conn;
 
-    GHashTable *list_channels;
-    GHashTable *group_channels;
-    gulong status_changed_id;
+    /* Maps TpHandle to PublishRequestData, corresponding to the handles on
+     * publish's local_pending.
+     */
+    GHashTable *pending_publish_requests;
+
+    /* Contacts whose publish requests we've accepted or declined. */
+    TpHandleSet *publishing_to;
+    TpHandleSet *not_publishing_to;
 
     gboolean dispose_has_run;
 };
 
-static void channel_manager_iface_init (gpointer, gpointer);
+static void haze_contact_list_mutable_init (TpMutableContactListInterface *);
+static void haze_contact_list_groups_init (TpContactGroupListInterface *);
+static void haze_contact_list_mutable_groups_init (
+    TpMutableContactGroupListInterface *);
+static void haze_contact_list_blockable_init (TpBlockableContactListInterface *);
 
 G_DEFINE_TYPE_WITH_CODE(HazeContactList,
     haze_contact_list,
-    G_TYPE_OBJECT,
-    G_IMPLEMENT_INTERFACE (TP_TYPE_CHANNEL_MANAGER,
-      channel_manager_iface_init))
-
-/* properties: */
-enum {
-    PROP_CONNECTION = 1,
-
-    LAST_PROPERTY
-};
+    TP_TYPE_BASE_CONTACT_LIST,
+    G_IMPLEMENT_INTERFACE (TP_TYPE_MUTABLE_CONTACT_LIST,
+      haze_contact_list_mutable_init);
+    G_IMPLEMENT_INTERFACE (TP_TYPE_CONTACT_GROUP_LIST,
+      haze_contact_list_groups_init);
+    G_IMPLEMENT_INTERFACE (TP_TYPE_MUTABLE_CONTACT_GROUP_LIST,
+      haze_contact_list_mutable_groups_init);
+    G_IMPLEMENT_INTERFACE (TP_TYPE_BLOCKABLE_CONTACT_LIST,
+      haze_contact_list_blockable_init))
 
 static void
 haze_contact_list_init (HazeContactList *self)
@@ -65,48 +103,7 @@ haze_contact_list_init (HazeContactList *self)
 
     self->priv = priv;
 
-    priv->list_channels = g_hash_table_new_full (g_direct_hash, g_direct_equal,
-                                                 NULL, g_object_unref);
-    priv->group_channels = g_hash_table_new_full (g_direct_hash, g_direct_equal,
-                                                  NULL, g_object_unref);
-
     priv->dispose_has_run = FALSE;
-}
-
-static void haze_contact_list_close_all (HazeContactList *self);
-
-static void _add_initial_buddies (HazeContactList *self,
-    HazeContactListChannel *subscribe);
-
-static void
-status_changed_cb (HazeConnection *conn,
-                   guint status,
-                   guint reason,
-                   HazeContactList *self)
-{
-    switch (status)
-    {
-    case TP_CONNECTION_STATUS_DISCONNECTED:
-        haze_contact_list_close_all (self);
-        break;
-    case TP_CONNECTION_STATUS_CONNECTED:
-        {
-            HazeContactListChannel *subscribe, *publish;
-
-            /* Ensure contact lists exist before going any further. */
-            subscribe = haze_contact_list_get_channel (self,
-                TP_HANDLE_TYPE_LIST, HAZE_LIST_HANDLE_SUBSCRIBE,
-                NULL, NULL /*created*/);
-            g_assert (subscribe != NULL);
-
-            publish = haze_contact_list_get_channel (self, TP_HANDLE_TYPE_LIST,
-                    HAZE_LIST_HANDLE_PUBLISH, NULL, NULL /*created*/);
-            g_assert (publish != NULL);
-
-            _add_initial_buddies (self, subscribe);
-        }
-        break;
-    }
 }
 
 static GObject *
@@ -115,13 +112,26 @@ haze_contact_list_constructor (GType type, guint n_props,
 {
     GObject *obj;
     HazeContactList *self;
+    TpHandleRepoIface *contact_repo;
 
     obj = G_OBJECT_CLASS (haze_contact_list_parent_class)->
         constructor (type, n_props, props);
 
     self = HAZE_CONTACT_LIST (obj);
-    self->priv->status_changed_id = g_signal_connect (self->priv->conn,
-        "status-changed", (GCallback) status_changed_cb, self);
+
+    self->priv->conn = HAZE_CONNECTION (tp_base_contact_list_get_connection (
+        (TpBaseContactList *) self, NULL));
+    g_assert (self->priv->conn != NULL);
+    /* not reffed, for the moment */
+
+    contact_repo = tp_base_connection_get_handles (
+        (TpBaseConnection *) self->priv->conn, TP_HANDLE_TYPE_CONTACT);
+
+    self->priv->publishing_to = tp_handle_set_new (contact_repo);
+    self->priv->not_publishing_to = tp_handle_set_new (contact_repo);
+
+    self->priv->pending_publish_requests = g_hash_table_new_full (NULL, NULL,
+        NULL, (GDestroyNotify) publish_request_data_free);
 
     return obj;
 }
@@ -137,9 +147,15 @@ haze_contact_list_dispose (GObject *object)
 
     priv->dispose_has_run = TRUE;
 
-    haze_contact_list_close_all (self);
-    g_assert (priv->list_channels == NULL);
-    g_assert (priv->group_channels == NULL);
+    tp_clear_pointer (&priv->publishing_to, tp_handle_set_destroy);
+    tp_clear_pointer (&priv->not_publishing_to, tp_handle_set_destroy);
+
+    if (priv->pending_publish_requests)
+    {
+        g_assert (g_hash_table_size (priv->pending_publish_requests) == 0);
+        g_hash_table_destroy (priv->pending_publish_requests);
+        priv->pending_publish_requests = NULL;
+    }
 
     if (G_OBJECT_CLASS (haze_contact_list_parent_class)->dispose)
         G_OBJECT_CLASS (haze_contact_list_parent_class)->dispose (object);
@@ -151,69 +167,122 @@ haze_contact_list_finalize (GObject *object)
     G_OBJECT_CLASS (haze_contact_list_parent_class)->finalize (object);
 }
 
-static void
-haze_contact_list_get_property (GObject    *object,
-                                guint       property_id,
-                                GValue     *value,
-                                GParamSpec *pspec)
-{
-    HazeContactList *self = HAZE_CONTACT_LIST (object);
-    HazeContactListPrivate *priv = self->priv;
-
-    switch (property_id) {
-        case PROP_CONNECTION:
-            g_value_set_object (value, priv->conn);
-            break;
-        default:
-            G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
-            break;
-    }
-}
-
-static void
-haze_contact_list_set_property (GObject      *object,
-                                guint         property_id,
-                                const GValue *value,
-                                GParamSpec   *pspec)
-{
-    HazeContactList *self = HAZE_CONTACT_LIST (object);
-    HazeContactListPrivate *priv = self->priv;
-
-    switch (property_id) {
-        case PROP_CONNECTION:
-            priv->conn = g_value_get_object (value);
-            break;
-        default:
-            G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
-            break;
-    }
-}
 static void buddy_added_cb (PurpleBuddy *buddy, gpointer unused);
 static void buddy_removed_cb (PurpleBuddy *buddy, gpointer unused);
+
+static TpHandleSet *
+haze_contact_list_dup_contacts (TpBaseContactList *cl)
+{
+  HazeContactList *self = HAZE_CONTACT_LIST (cl);
+  TpBaseConnection *base_conn = TP_BASE_CONNECTION (self->priv->conn);
+  TpHandleRepoIface *contact_repo = tp_base_connection_get_handles (base_conn,
+      TP_HANDLE_TYPE_CONTACT);
+  /* The list initially contains anyone we're definitely publishing to.
+   * Because libpurple, that's only people whose request we accepted during
+   * this session :-( */
+  TpHandleSet *handles = tp_handle_set_copy (self->priv->publishing_to);
+  GSList *buddies = purple_find_buddies (self->priv->conn->account, NULL);
+  GSList *sl_iter;
+  GHashTableIter hash_iter;
+  gpointer k;
+
+  /* Also include anyone on our buddy list */
+  for (sl_iter = buddies; sl_iter != NULL; sl_iter = sl_iter->next)
+    {
+      TpHandle handle = tp_handle_ensure (contact_repo,
+          purple_buddy_get_name (sl_iter->data), NULL, NULL);
+
+      if (G_LIKELY (handle != 0))
+        {
+          tp_handle_set_add (handles, handle);
+          tp_handle_unref (contact_repo, handle);
+        }
+    }
+
+  g_slist_free (buddies);
+
+  /* Also include anyone with an outstanding request */
+  g_hash_table_iter_init (&hash_iter, self->priv->pending_publish_requests);
+
+  while (g_hash_table_iter_next (&hash_iter, &k, NULL))
+    {
+      tp_handle_set_add (handles, GPOINTER_TO_UINT (k));
+    }
+
+  return handles;
+}
+
+static void
+haze_contact_list_dup_states (TpBaseContactList *cl,
+    TpHandle contact,
+    TpSubscriptionState *subscribe_out,
+    TpSubscriptionState *publish_out,
+    gchar **publish_request_out)
+{
+  HazeContactList *self = HAZE_CONTACT_LIST (cl);
+  const gchar *bname = haze_connection_handle_inspect (self->priv->conn,
+      TP_HANDLE_TYPE_CONTACT, contact);
+  PurpleBuddy *buddy = purple_find_buddy (self->priv->conn->account, bname);
+  TpSubscriptionState pub, sub;
+  PublishRequestData *pub_req = g_hash_table_lookup (
+      self->priv->pending_publish_requests, GUINT_TO_POINTER (contact));
+
+  if (publish_request_out != NULL)
+    *publish_request_out = NULL;
+
+  if (buddy != NULL)
+    {
+      /* Well, it's on the contact list. Are we subscribed to its presence?
+       * Who knows? Let's assume we are. */
+      sub = TP_SUBSCRIPTION_STATE_YES;
+    }
+  else
+    {
+      /* We're definitely not subscribed. */
+      sub = TP_SUBSCRIPTION_STATE_NO;
+    }
+
+  if (pub_req != NULL)
+    {
+      pub = TP_SUBSCRIPTION_STATE_ASK;
+
+      if (publish_request_out != NULL)
+        *publish_request_out = g_strdup (pub_req->message);
+    }
+  else if (tp_handle_set_is_member (self->priv->publishing_to, contact))
+    {
+      pub = TP_SUBSCRIPTION_STATE_YES;
+    }
+  else if (tp_handle_set_is_member (self->priv->not_publishing_to, contact))
+    {
+      pub = TP_SUBSCRIPTION_STATE_NO;
+    }
+  else
+    {
+      pub = TP_SUBSCRIPTION_STATE_UNKNOWN;
+    }
+
+  if (subscribe_out != NULL)
+    *subscribe_out = sub;
+
+  if (publish_out != NULL)
+    *publish_out = pub;
+}
 
 static void
 haze_contact_list_class_init (HazeContactListClass *klass)
 {
     GObjectClass *object_class = G_OBJECT_CLASS (klass);
-    GParamSpec *param_spec;
+    TpBaseContactListClass *parent_class = TP_BASE_CONTACT_LIST_CLASS (klass);
 
     object_class->constructor = haze_contact_list_constructor;
 
     object_class->dispose = haze_contact_list_dispose;
     object_class->finalize = haze_contact_list_finalize;
 
-    object_class->get_property = haze_contact_list_get_property;
-    object_class->set_property = haze_contact_list_set_property;
-
-    param_spec = g_param_spec_object ("connection", "HazeConnection object",
-                                      "Haze connection object that owns this "
-                                      "contact list object.",
-                                      HAZE_TYPE_CONNECTION,
-                                      G_PARAM_CONSTRUCT_ONLY |
-                                      G_PARAM_READWRITE |
-                                      G_PARAM_STATIC_NICK |
-                                      G_PARAM_STATIC_BLURB);
-    g_object_class_install_property (object_class, PROP_CONNECTION, param_spec);
+    parent_class->dup_contacts = haze_contact_list_dup_contacts;
+    parent_class->dup_states = haze_contact_list_dup_states;
+    /* we assume the contact list does persist, which is the default */
 
     g_type_class_add_private (object_class,
                               sizeof(HazeContactListPrivate));
@@ -225,312 +294,35 @@ haze_contact_list_class_init (HazeContactListClass *klass)
 }
 
 static void
-contact_list_channel_closed_cb (HazeContactListChannel *chan,
-                                gpointer user_data)
-{
-    HazeContactList *contact_list = HAZE_CONTACT_LIST (user_data);
-    HazeContactListPrivate *priv = contact_list->priv;
-    TpHandle handle;
-    guint handle_type;
-    GHashTable *channels;
-
-    tp_channel_manager_emit_channel_closed_for_object (contact_list,
-        TP_EXPORTABLE_CHANNEL (chan));
-
-    g_object_get (chan, "handle", &handle, "handle-type", &handle_type, NULL);
-    g_assert (handle_type == TP_HANDLE_TYPE_LIST ||
-              handle_type == TP_HANDLE_TYPE_GROUP);
-
-    channels = (handle_type == TP_HANDLE_TYPE_GROUP
-        ? priv->group_channels : priv->list_channels);
-
-    if (channels)
-    {
-        DEBUG ("removing channel %d:%d", handle_type, handle);
-
-        g_hash_table_remove (channels, GINT_TO_POINTER (handle));
-    }
-}
-
-/**
- * Instantiates the described channel.  Requires that the channel does
- * not already exist.
- */
-static HazeContactListChannel *
-_haze_contact_list_create_channel (HazeContactList *contact_list,
-                                   guint handle_type,
-                                   TpHandle handle,
-                                   gpointer request_token)
-{
-    HazeContactListPrivate *priv = contact_list->priv;
-    TpBaseConnection *base_conn = TP_BASE_CONNECTION (priv->conn);
-    GHashTable *channels = (handle_type == TP_HANDLE_TYPE_LIST
-                           ? priv->list_channels
-                           : priv->group_channels);
-
-    HazeContactListChannel *chan;
-    const char *name;
-    char *mangled_name;
-    char *object_path;
-    GSList *requests = NULL;
-
-    g_assert (handle_type == TP_HANDLE_TYPE_LIST ||
-            handle_type == TP_HANDLE_TYPE_GROUP);
-    g_assert (channels != NULL);
-    g_assert (g_hash_table_lookup (channels, GINT_TO_POINTER (handle)) == NULL);
-
-    name = haze_connection_handle_inspect (priv->conn, handle_type, handle);
-    DEBUG ("Instantiating channel %u:%u \"%s\"", handle_type, handle, name);
-    mangled_name = tp_escape_as_identifier (name);
-    object_path = g_strdup_printf ("%s/ContactListChannel/%s/%s",
-                                   base_conn->object_path,
-                                   handle_type == TP_HANDLE_TYPE_LIST ? "List"
-                                                                      : "Group",
-                                   mangled_name);
-    g_free (mangled_name);
-    mangled_name = NULL;
-
-    chan = g_object_new (HAZE_TYPE_CONTACT_LIST_CHANNEL,
-                         "connection", priv->conn,
-                         "object-path", object_path,
-                         "handle", handle,
-                         "handle-type", handle_type,
-                         NULL);
-
-    DEBUG ("created %s", object_path);
-
-    g_signal_connect (chan, "closed",
-        G_CALLBACK (contact_list_channel_closed_cb), contact_list);
-
-    g_hash_table_insert (channels, GINT_TO_POINTER (handle), chan);
-
-    if (request_token != NULL)
-        requests = g_slist_prepend (requests, request_token);
-
-    tp_channel_manager_emit_new_channel (contact_list,
-        TP_EXPORTABLE_CHANNEL (chan), requests);
-    g_slist_free (requests);
-
-    g_free (object_path);
-
-    return chan;
-}
-
-struct foreach_data {
-    TpExportableChannelFunc func;
-    gpointer data;
-};
-
-static void
-foreach_helper (gpointer k,
-                gpointer v,
-                gpointer data)
-{
-  struct foreach_data *foreach = data;
-
-  foreach->func (TP_EXPORTABLE_CHANNEL (v), foreach->data);
-}
-
-static void
-haze_contact_list_foreach_channel (TpChannelManager *manager,
-                                   TpExportableChannelFunc func,
-                                   gpointer data)
-{
-    HazeContactList *self = HAZE_CONTACT_LIST (manager);
-    struct foreach_data foreach = { func, data };
-
-    g_hash_table_foreach (self->priv->group_channels, foreach_helper,
-        &foreach);
-    g_hash_table_foreach (self->priv->list_channels, foreach_helper,
-        &foreach);
-}
-
-static const gchar * const list_fixed_properties[] = {
-    TP_IFACE_CHANNEL ".ChannelType",
-    TP_IFACE_CHANNEL ".TargetHandleType",
-    NULL
-};
-static const gchar * const list_allowed_properties[] = {
-    TP_IFACE_CHANNEL ".TargetHandle",
-    TP_IFACE_CHANNEL ".TargetID",
-    NULL
-};
-static const gchar * const *group_fixed_properties = list_fixed_properties;
-static const gchar * const *group_allowed_properties = list_allowed_properties;
-
-static void
-haze_contact_list_foreach_channel_class (TpChannelManager *manager,
-                                         TpChannelManagerChannelClassFunc func,
-                                         gpointer user_data)
-{
-    GHashTable *table = g_hash_table_new_full (g_str_hash, g_str_equal,
-        NULL, (GDestroyNotify) tp_g_value_slice_free);
-    GValue *value, *handle_type_value;
-
-    value = tp_g_value_slice_new (G_TYPE_STRING);
-    g_value_set_static_string (value, TP_IFACE_CHANNEL_TYPE_CONTACT_LIST);
-    g_hash_table_insert (table, TP_IFACE_CHANNEL ".ChannelType", value);
-
-    handle_type_value = tp_g_value_slice_new (G_TYPE_UINT);
-    g_hash_table_insert (table, TP_IFACE_CHANNEL ".TargetHandleType",
-        handle_type_value);
-
-    g_value_set_uint (handle_type_value, TP_HANDLE_TYPE_LIST);
-    func (manager, table, list_allowed_properties, user_data);
-
-    g_value_set_uint (handle_type_value, TP_HANDLE_TYPE_GROUP);
-    func (manager, table, group_allowed_properties, user_data);
-
-    g_hash_table_destroy (table);
-}
-
-HazeContactListChannel *
-haze_contact_list_get_channel (HazeContactList *contact_list,
-                               guint handle_type,
-                               TpHandle handle,
-                               gpointer request_token,
-                               gboolean *created)
-{
-    HazeContactListPrivate *priv = contact_list->priv;
-    TpBaseConnection *conn = TP_BASE_CONNECTION (priv->conn);
-    TpHandleRepoIface *handle_repo =
-        tp_base_connection_get_handles (conn, handle_type);
-    GHashTable *channels = (handle_type == TP_HANDLE_TYPE_LIST
-                           ? priv->list_channels
-                           : priv->group_channels);
-    HazeContactListChannel *chan;
-
-    g_assert (handle_type == TP_HANDLE_TYPE_LIST ||
-              handle_type == TP_HANDLE_TYPE_GROUP);
-    g_assert (tp_handle_is_valid (handle_repo, handle, NULL));
-
-    DEBUG ("looking up channel %u:%u '%s'", handle_type, handle,
-        tp_handle_inspect (handle_repo, handle));
-    chan = g_hash_table_lookup (channels, GINT_TO_POINTER (handle));
-
-    if (chan) {
-        if (created)
-            *created = FALSE;
-    }
-    else
-    {
-        chan = _haze_contact_list_create_channel (contact_list, handle_type,
-            handle, request_token);
-        if (created)
-            *created = TRUE;
-    }
-
-    return chan;
-}
-
-static HazeContactListChannel *
-_haze_contact_list_get_group (HazeContactList *contact_list,
-                              const char *group_name,
-                              gboolean *created)
-{
-    HazeContactListPrivate *priv = contact_list->priv;
-    TpBaseConnection *base_conn = TP_BASE_CONNECTION (priv->conn);
-    TpHandleRepoIface *group_repo = tp_base_connection_get_handles (base_conn,
-        TP_HANDLE_TYPE_GROUP);
-    TpHandle group_handle = tp_handle_ensure (group_repo, group_name, NULL,
-        NULL);
-    HazeContactListChannel *group;
-
-    group = haze_contact_list_get_channel (contact_list, TP_HANDLE_TYPE_GROUP,
-        group_handle, NULL, created);
-
-    tp_handle_unref (group_repo, group_handle);
-
-    return group;
-}
-
-static void
-haze_contact_list_close_all (HazeContactList *self)
-{
-    HazeContactListPrivate *priv = self->priv;
-    GHashTable *tmp;
-
-    if (priv->list_channels)
-    {
-        tmp = priv->list_channels;
-        priv->list_channels = NULL;
-        g_hash_table_destroy (tmp);
-    }
-    if (priv->group_channels)
-    {
-        tmp = priv->group_channels;
-        priv->group_channels = NULL;
-        g_hash_table_destroy (tmp);
-    }
-
-    if (priv->status_changed_id != 0)
-    {
-        g_signal_handler_disconnect (priv->conn, priv->status_changed_id);
-        priv->status_changed_id = 0;
-    }
-}
-
-static TpHandleSet *
-_handle_a_buddy (HazeConnection *conn,
-                 PurpleBuddy *buddy)
-{
-    TpBaseConnection *base_conn = TP_BASE_CONNECTION (conn);
-    TpHandleRepoIface *contact_repo = tp_base_connection_get_handles (base_conn,
-        TP_HANDLE_TYPE_CONTACT);
-    TpHandleSet *set = tp_handle_set_new (contact_repo);
-
-    const gchar *name = purple_buddy_get_name (buddy);
-    TpHandle handle = tp_handle_ensure (contact_repo, name,
-        NULL, NULL);
-    tp_handle_set_add (set, handle);
-    tp_handle_unref (contact_repo, handle); /* reffed by set */
-
-    return set;
-}
-
-static void
 buddy_added_cb (PurpleBuddy *buddy, gpointer unused)
 {
     HazeConnection *conn = ACCOUNT_GET_HAZE_CONNECTION (buddy->account);
     HazeContactList *contact_list = conn->contact_list;
-    HazeContactListPrivate *priv = contact_list->priv;
-    HazeContactListChannel *subscribe, *group;
-    TpHandleSet *add_handles;
+    TpBaseConnection *base_conn = TP_BASE_CONNECTION (conn);
+    TpHandleRepoIface *contact_repo = tp_base_connection_get_handles (
+        base_conn, TP_HANDLE_TYPE_CONTACT);
+    const gchar *name = purple_buddy_get_name (buddy);
+    TpHandle handle = tp_handle_ensure (contact_repo, name, NULL, NULL);
     const char *group_name;
 
-    DEBUG ("%s", purple_buddy_get_name (buddy));
-
-    if (TP_BASE_CONNECTION (conn)->status == TP_CONNECTION_STATUS_DISCONNECTED)
-    {
-        DEBUG ("disconnected, ignoring");
-        return;
-    }
-
-    add_handles = _handle_a_buddy (priv->conn, buddy);
-
-    subscribe = haze_contact_list_get_channel (contact_list,
-        TP_HANDLE_TYPE_LIST, HAZE_LIST_HANDLE_SUBSCRIBE, NULL, NULL);
-
-    tp_group_mixin_change_members (G_OBJECT (subscribe), "",
-        tp_handle_set_peek (add_handles), NULL, NULL, NULL, 0, 0);
+    tp_base_contact_list_one_contact_changed (
+        (TpBaseContactList *) contact_list, handle);
 
     group_name = purple_group_get_name (purple_buddy_get_group (buddy));
-    group = _haze_contact_list_get_group (contact_list, group_name, NULL);
+    tp_base_contact_list_one_contact_groups_changed (
+        (TpBaseContactList *) contact_list, handle, &group_name, 1, NULL, 0);
 
-    tp_group_mixin_change_members (G_OBJECT (group), "",
-        tp_handle_set_peek (add_handles), NULL, NULL, NULL, 0, 0);
-
-    tp_handle_set_destroy (add_handles);
+    tp_handle_unref (contact_repo, handle);
 }
 
 static void
 buddy_removed_cb (PurpleBuddy *buddy, gpointer unused)
 {
     HazeConnection *conn = ACCOUNT_GET_HAZE_CONNECTION (buddy->account);
-    HazeContactList *contact_list = conn->contact_list;
-    HazeContactListPrivate *priv = contact_list->priv;
-    HazeContactListChannel *subscribe, *group;
-    TpHandleSet *rem_handles;
+    TpBaseConnection *base_conn = TP_BASE_CONNECTION (conn);
+    HazeContactList *contact_list;
+    TpHandleRepoIface *contact_repo;
+    TpHandle handle;
     const char *group_name, *buddy_name;
     GSList *buddies, *l;
     gboolean last_instance = TRUE;
@@ -538,15 +330,22 @@ buddy_removed_cb (PurpleBuddy *buddy, gpointer unused)
     /* Every buddy gets removed after disconnection, because the PurpleAccount
      * gets deleted.  So let's ignore removals when we're offline.
      */
-    if (TP_BASE_CONNECTION (conn)->status == TP_CONNECTION_STATUS_DISCONNECTED)
+    if (base_conn->status == TP_CONNECTION_STATUS_DISCONNECTED)
         return;
 
+    contact_list = conn->contact_list;
+    contact_repo = tp_base_connection_get_handles (base_conn,
+        TP_HANDLE_TYPE_CONTACT);
+
     buddy_name = purple_buddy_get_name (buddy);
-    DEBUG ("%s", buddy_name);
+    handle = tp_handle_ensure (contact_repo, buddy_name, NULL, NULL);
+    group_name = purple_group_get_name (purple_buddy_get_group (buddy));
 
-    rem_handles = _handle_a_buddy (priv->conn, buddy);
+    tp_base_contact_list_one_contact_groups_changed (
+        (TpBaseContactList *) contact_list, handle, NULL, 0, &group_name, 1);
 
-    buddies = purple_find_buddies (priv->conn->account, buddy_name);
+    buddies = purple_find_buddies (conn->account, buddy_name);
+
     for (l = buddies; l != NULL; l = l->next)
     {
         if (l->data != buddy)
@@ -555,24 +354,16 @@ buddy_removed_cb (PurpleBuddy *buddy, gpointer unused)
             break;
         }
     }
+
     g_slist_free (buddies);
 
     if (last_instance)
     {
-        subscribe = haze_contact_list_get_channel (contact_list,
-            TP_HANDLE_TYPE_LIST, HAZE_LIST_HANDLE_SUBSCRIBE, NULL, NULL);
-
-        tp_group_mixin_change_members (G_OBJECT (subscribe), "",
-            NULL, tp_handle_set_peek (rem_handles), NULL, NULL, 0, 0);
+        tp_base_contact_list_one_contact_removed (
+            (TpBaseContactList *) contact_list, handle);
     }
 
-    group_name = purple_group_get_name (purple_buddy_get_group (buddy));
-    group = _haze_contact_list_get_group (contact_list, group_name, NULL);
-
-    tp_group_mixin_change_members (G_OBJECT (group), "",
-        NULL, tp_handle_set_peek (rem_handles), NULL, NULL, 0, 0);
-
-    tp_handle_set_destroy (rem_handles);
+    tp_handle_unref (contact_repo, handle);
 }
 
 
@@ -587,216 +378,981 @@ typedef struct _HandleContext {
     GHashTable *group_handles;
 } HandleContext;
 
-
-/* Called for each buddy on the purple buddy list at login.  Adds them to the
- * handle set that will become the 'subscribe' list, and to the handle set
- * which will become their group's channel.
+/* Removes the PublishRequestData for the given handle, from the
+ * pending_publish_requests table, dropping its reference to that handle.
  */
 static void
-_initial_buddies_foreach (PurpleBuddy *buddy,
-                          HandleContext *context)
+remove_pending_publish_request (HazeContactList *self,
+                                TpHandle handle)
 {
-    const gchar *name = purple_buddy_get_name (buddy);
-    PurpleGroup *group = purple_buddy_get_group (buddy);
-    gchar *group_name = group->name;
-    TpIntSet *group_set;
-    TpHandle handle;
-
-    handle = tp_handle_ensure (context->contact_repo, name, NULL, NULL);
-    tp_handle_set_add (context->add_handles, handle);
-
-    group_set = g_hash_table_lookup (context->group_handles, group_name);
-
-    if (!group_set) {
-        group_set = tp_intset_new ();
-        g_hash_table_insert (context->group_handles, group_name, group_set);
-    }
-
-    tp_intset_add (group_set, handle);
-
-    tp_handle_unref (context->contact_repo, handle);
-
-}
-
-
-/* Creates a group channel on contact_list called group_name, containing the
- * supplied handles.  Called while traversing the buddy list at login.
- */
-static gboolean
-_create_initial_group(gchar *group_name,
-                      TpIntSet *handles,
-                      HazeContactList *contact_list)
-{
-    HazeContactListPrivate *priv = contact_list->priv;
-    TpBaseConnection *conn = TP_BASE_CONNECTION (priv->conn);
+    HazeConnection *conn = self->priv->conn;
+    TpBaseConnection *base_conn = TP_BASE_CONNECTION (conn);
     TpHandleRepoIface *handle_repo =
-        tp_base_connection_get_handles (conn, TP_HANDLE_TYPE_GROUP);
-    HazeContactListChannel *group;
-    TpHandle group_handle = tp_handle_ensure (handle_repo, group_name, NULL,
-        NULL);
-    group = haze_contact_list_get_channel (contact_list,
-        TP_HANDLE_TYPE_GROUP, group_handle, NULL, NULL /*created*/);
+        tp_base_connection_get_handles (base_conn, TP_HANDLE_TYPE_CONTACT);
 
-    tp_group_mixin_change_members (G_OBJECT (group), "", handles, NULL,
-                                   NULL, NULL, 0, 0);
+    gpointer h = GUINT_TO_POINTER (handle);
+    gboolean removed;
 
-    tp_handle_unref (handle_repo, group_handle); /* reffed by group */
+    removed = g_hash_table_remove (self->priv->pending_publish_requests, h);
+    g_assert (removed);
 
-    /* Remove this group from the hash of groups to be constructed. */
-    return TRUE;
+    tp_handle_unref (handle_repo, handle);
+}
+
+void
+haze_contact_list_accept_publish_request (HazeContactList *self,
+    TpHandle handle)
+{
+  gpointer key = GUINT_TO_POINTER (handle);
+  PublishRequestData *request_data = g_hash_table_lookup (
+      self->priv->pending_publish_requests, key);
+  const gchar *bname = haze_connection_handle_inspect (self->priv->conn,
+      TP_HANDLE_TYPE_CONTACT, handle);
+
+  if (request_data == NULL)
+    return;
+
+  DEBUG ("allowing publish request for %s", bname);
+  request_data->allow(request_data->data);
+
+  tp_handle_set_add (self->priv->publishing_to, handle);
+  remove_pending_publish_request (self, handle);
+
+  tp_base_contact_list_one_contact_changed ((TpBaseContactList *) self,
+      handle);
+}
+
+static void
+haze_contact_list_authorize_publication_async (TpBaseContactList *cl,
+    TpHandleSet *contacts,
+    GAsyncReadyCallback callback,
+    gpointer user_data)
+{
+  HazeContactList *self = HAZE_CONTACT_LIST (cl);
+  TpIntsetFastIter iter;
+  TpHandle handle;
+
+  tp_intset_fast_iter_init (&iter, tp_handle_set_peek (contacts));
+
+  while (tp_intset_fast_iter_next (&iter, &handle))
+    haze_contact_list_accept_publish_request (self, handle);
+
+  tp_simple_async_report_success_in_idle ((GObject *) self, callback,
+      user_data, haze_contact_list_authorize_publication_async);
+}
+
+void
+haze_contact_list_reject_publish_request (HazeContactList *self,
+    TpHandle handle)
+{
+  gpointer key = GUINT_TO_POINTER (handle);
+  PublishRequestData *request_data = g_hash_table_lookup (
+      self->priv->pending_publish_requests, key);
+  const gchar *bname = haze_connection_handle_inspect (self->priv->conn,
+      TP_HANDLE_TYPE_CONTACT, handle);
+
+  if (request_data == NULL)
+    return;
+
+  DEBUG ("denying publish request for %s", bname);
+  request_data->deny(request_data->data);
+
+  tp_handle_set_add (self->priv->not_publishing_to, handle);
+  remove_pending_publish_request (self, handle);
+
+  tp_base_contact_list_one_contact_changed ((TpBaseContactList *) self,
+      handle);
 }
 
 
-/* Iterates across all buddies on a purple account's buddy list at login,
- * adding them to subscribe.
- */
-static void
-_add_initial_buddies (HazeContactList *self,
-                      HazeContactListChannel *subscribe)
+gpointer
+haze_request_authorize (PurpleAccount *account,
+                        const char *remote_user,
+                        const char *id,
+                        const char *alias,
+                        const char *message,
+                        gboolean on_list,
+                        PurpleAccountRequestAuthorizationCb authorize_cb,
+                        PurpleAccountRequestAuthorizationCb deny_cb,
+                        void *user_data)
 {
-    HazeContactListPrivate *priv = self->priv;
-
-    PurpleAccount *account = priv->conn->account;
-    GSList *buddies = purple_find_buddies(account, NULL);
-
-    TpBaseConnection *base_conn = TP_BASE_CONNECTION (priv->conn);
+    HazeConnection *conn = account->ui_data;
+    TpBaseConnection *base_conn = TP_BASE_CONNECTION (conn);
     TpHandleRepoIface *contact_repo = tp_base_connection_get_handles (base_conn,
         TP_HANDLE_TYPE_CONTACT);
+    HazeContactList *self = conn->contact_list;
+    TpHandle remote_handle;
+    PublishRequestData *request_data = publish_request_data_new ();
 
-    TpHandleSet *add_handles = tp_handle_set_new (contact_repo);
-    GHashTable *group_handles = g_hash_table_new_full (NULL, NULL, NULL,
-        (GDestroyNotify) tp_intset_destroy);
-    HandleContext context = { contact_repo, add_handles, group_handles };
+    /* This handle is owned by request_data, and is unreffed in
+     * remove_pending_publish_request.
+     */
+    remote_handle = tp_handle_ensure (contact_repo, remote_user, NULL, NULL);
+    request_data->self = g_object_ref (conn->contact_list);
+    request_data->handle = remote_handle;
+    request_data->allow = authorize_cb;
+    request_data->deny = deny_cb;
+    request_data->data = user_data;
+    request_data->message = g_strdup (message);
 
-    g_slist_foreach (buddies, (GFunc) _initial_buddies_foreach, &context);
-    g_slist_free (buddies);
+    g_hash_table_insert (conn->contact_list->priv->pending_publish_requests,
+        GUINT_TO_POINTER (remote_handle), request_data);
 
-    tp_group_mixin_change_members (G_OBJECT (subscribe), "",
-        tp_handle_set_peek (add_handles), NULL, NULL, NULL, 0, 0);
+    /* If we got a publish request from them, then presumably we weren't
+     * already publishing to them? */
+    tp_handle_set_remove (self->priv->publishing_to, remote_handle);
+    tp_handle_set_add (self->priv->not_publishing_to, remote_handle);
 
-    g_hash_table_foreach_remove (group_handles, (GHRFunc) _create_initial_group,
-        self);
-    g_hash_table_destroy (group_handles);
+    tp_base_contact_list_one_contact_changed ((TpBaseContactList *) self,
+        remote_handle);
 
-    tp_handle_set_destroy (add_handles);
-}
-
-static gboolean
-haze_contact_list_request (HazeContactList *self,
-                           gpointer request_token,
-                           GHashTable *request_properties,
-                           gboolean require_new)
-{
-    TpHandleRepoIface *handle_repo;
-    TpHandleType handle_type;
-    TpHandle handle;
-    const gchar *channel_name;
-    gboolean created;
-    HazeContactListChannel *chan;
-    GError *error = NULL;
-    const gchar * const *fixed_properties;
-    const gchar * const *allowed_properties;
-
-    if (tp_strdiff (tp_asv_get_string (request_properties,
-            TP_IFACE_CHANNEL ".ChannelType"),
-        TP_IFACE_CHANNEL_TYPE_CONTACT_LIST))
-    {
-        return FALSE;
-    }
-
-    handle_type = tp_asv_get_uint32 (request_properties,
-        TP_IFACE_CHANNEL ".TargetHandleType", NULL);
-
-    switch (handle_type)
-    {
-    case TP_HANDLE_TYPE_LIST:
-        fixed_properties = list_fixed_properties;
-        allowed_properties = list_allowed_properties;
-        break;
-    case TP_HANDLE_TYPE_GROUP:
-        fixed_properties = group_fixed_properties;
-        allowed_properties = group_allowed_properties;
-        break;
-    default:
-        return FALSE;
-    }
-
-    handle_repo = tp_base_connection_get_handles (
-        TP_BASE_CONNECTION (self->priv->conn), handle_type);
-
-    handle = tp_asv_get_uint32 (request_properties,
-        TP_IFACE_CHANNEL ".TargetHandle", NULL);
-    g_assert (tp_handle_is_valid (handle_repo, handle, NULL));
-
-    if (tp_channel_manager_asv_has_unknown_properties (request_properties,
-          fixed_properties, allowed_properties, &error))
-    {
-        goto error;
-    }
-
-    channel_name = tp_handle_inspect (handle_repo, handle);
-    DEBUG ("grabbing channel '%s'...", channel_name);
-
-    chan = haze_contact_list_get_channel (self, handle_type, handle,
-        request_token, &created);
-    g_assert (chan != NULL);
-
-    if (!created)
-    {
-        if (require_new)
-        {
-            tp_channel_manager_emit_request_failed (self, request_token,
-                TP_ERRORS, TP_ERROR_NOT_AVAILABLE, "Channel already exists");
-        }
-        else
-        {
-            tp_channel_manager_emit_request_already_satisfied (self,
-                request_token, TP_EXPORTABLE_CHANNEL (chan));
-        }
-    }
-
-    return TRUE;
-
-error:
-    tp_channel_manager_emit_request_failed (self, request_token,
-        error->domain, error->code, error->message);
-    g_error_free (error);
-    return TRUE;
+    return request_data;
 }
 
 
-static gboolean
-haze_contact_list_create_channel (TpChannelManager *manager,
-                                  gpointer request_token,
-                                  GHashTable *request_properties)
+void
+haze_close_account_request (gpointer request_data_)
 {
-    HazeContactList *self = HAZE_CONTACT_LIST (manager);
+    PublishRequestData *request_data = request_data_;
+    /* When 'request_data' is removed from the pending request table, its
+     * reference to 'self' is dropped.  So, we take our own reference here,
+     * in case the reference in 'request_data' was the last one. */
+    HazeContactList *self = g_object_ref (request_data->self);
+    TpHandle handle = request_data->handle;
 
-    return haze_contact_list_request (self, request_token,
-        request_properties, TRUE);
+    /* Note that adding the handle to @not_publishing_to has the side-effect
+     * of ensuring that it remains valid long enough for us to signal the
+     * change. */
+    DEBUG ("cancelling publish request for handle %u", handle);
+    tp_handle_set_add (self->priv->not_publishing_to, handle);
+    remove_pending_publish_request (self, handle);
+
+    tp_base_contact_list_one_contact_changed ((TpBaseContactList *) self,
+        handle);
+
+    g_object_unref (self);
 }
 
-static gboolean
-haze_contact_list_ensure_channel (TpChannelManager *manager,
-                                  gpointer request_token,
-                                  GHashTable *request_properties)
+void
+haze_contact_list_request_subscription (HazeContactList *self,
+    TpHandle handle,
+    const gchar *message)
 {
-    HazeContactList *self = HAZE_CONTACT_LIST (manager);
+  PurpleAccount *account = self->priv->conn->account;
+  const gchar *bname = haze_connection_handle_inspect (self->priv->conn,
+      TP_HANDLE_TYPE_CONTACT, handle);
+  PurpleBuddy *buddy;
 
-    return haze_contact_list_request (self, request_token,
-        request_properties, FALSE);
+  /* If the buddy already exists, then it should already be on the
+   * subscribe list.
+   */
+  g_assert (purple_find_buddy (account, bname) == NULL);
+
+  buddy = purple_buddy_new (account, bname, NULL);
+
+  /* FIXME: This emits buddy-added at once, so a buddy will never be
+   * on the pending list.  It doesn't look like libpurple even has
+   * the concept of a pending buddy.  Sigh.
+   */
+  purple_blist_add_buddy (buddy, NULL, NULL, NULL);
+  purple_account_add_buddy (account, buddy);
 }
 
 static void
-channel_manager_iface_init (gpointer g_iface,
-                            gpointer iface_data G_GNUC_UNUSED)
+haze_contact_list_request_subscription_async (TpBaseContactList *cl,
+    TpHandleSet *contacts,
+    const gchar *message,
+    GAsyncReadyCallback callback,
+    gpointer user_data)
 {
-    TpChannelManagerIface *iface = g_iface;
+  HazeContactList *self = HAZE_CONTACT_LIST (cl);
+  TpIntsetFastIter iter;
+  TpHandle handle;
 
-    iface->foreach_channel = haze_contact_list_foreach_channel;
-    iface->foreach_channel_class = haze_contact_list_foreach_channel_class;
-    iface->create_channel = haze_contact_list_create_channel;
-    iface->ensure_channel = haze_contact_list_ensure_channel;
-    /* Request is equivalent to Ensure for this channel class */
-    iface->request_channel = haze_contact_list_ensure_channel;
+  tp_intset_fast_iter_init (&iter, tp_handle_set_peek (contacts));
+
+  while (tp_intset_fast_iter_next (&iter, &handle))
+    haze_contact_list_request_subscription (self, handle, message);
+
+  tp_simple_async_report_success_in_idle ((GObject *) self, callback,
+      user_data, haze_contact_list_request_subscription_async);
+}
+
+static void
+haze_contact_list_store_contacts_async (TpBaseContactList *cl,
+    TpHandleSet *contacts,
+    GAsyncReadyCallback callback,
+    gpointer user_data)
+{
+  haze_contact_list_request_subscription_async (cl, contacts, "", callback,
+      user_data);
+}
+
+void
+haze_contact_list_remove_contact (HazeContactList *self,
+    TpHandle handle)
+{
+  PurpleAccount *account = self->priv->conn->account;
+  const gchar *bname = haze_connection_handle_inspect (self->priv->conn,
+      TP_HANDLE_TYPE_CONTACT, handle);
+  GSList *buddies, *l;
+
+  buddies = purple_find_buddies (account, bname);
+  /* buddies may be NULL, but that's a perfectly reasonable GSList */
+
+  /* Removing a buddy from subscribe entails removing it from all
+   * groups since you can't have a buddy without groups in libpurple.
+   */
+  for (l = buddies; l != NULL; l = l->next)
+    {
+      PurpleBuddy *buddy = (PurpleBuddy *) l->data;
+      PurpleGroup *group = purple_buddy_get_group (buddy);
+
+      purple_account_remove_buddy (account, buddy, group);
+      purple_blist_remove_buddy (buddy);
+    }
+
+  /* Also decline any publication requests we might have had */
+  haze_contact_list_reject_publish_request (self, handle);
+
+  g_slist_free (buddies);
+}
+
+static void
+haze_contact_list_remove_contacts_async (TpBaseContactList *cl,
+    TpHandleSet *contacts,
+    GAsyncReadyCallback callback,
+    gpointer user_data)
+{
+  HazeContactList *self = HAZE_CONTACT_LIST (cl);
+  TpIntsetFastIter iter;
+  TpHandle handle;
+
+  tp_intset_fast_iter_init (&iter, tp_handle_set_peek (contacts));
+
+  while (tp_intset_fast_iter_next (&iter, &handle))
+    haze_contact_list_remove_contact (self, handle);
+
+  tp_simple_async_report_success_in_idle ((GObject *) self, callback,
+      user_data, haze_contact_list_remove_contacts_async);
+}
+
+void
+haze_contact_list_add_to_group (HazeContactList *self,
+    const gchar *group_name,
+    TpHandle handle)
+{
+    HazeConnection *conn = self->priv->conn;
+    const gchar *bname =
+        haze_connection_handle_inspect (conn, TP_HANDLE_TYPE_CONTACT, handle);
+    PurpleBuddy *buddy;
+    /* This actually has "ensure" semantics, and doesn't return a ref */
+    PurpleGroup *group = purple_group_new (group_name);
+
+    /* We have to reassure the TpBaseContactList that the group exists,
+     * because libpurple doesn't have a group-added signal */
+    tp_base_contact_list_groups_created ((TpBaseContactList *) self,
+        &group_name, 1);
+
+    g_return_if_fail (group != NULL);
+
+    /* if the contact is in the group, we have nothing to do */
+    if (purple_find_buddy_in_group (conn->account, bname, group) != NULL)
+      return;
+
+    buddy = purple_buddy_new (conn->account, bname, NULL);
+
+    /* FIXME: This causes it to be added to 'subscribed' too. */
+    purple_blist_add_buddy (buddy, NULL, group, NULL);
+    purple_account_add_buddy (conn->account, buddy);
+}
+
+/* Prepare to @contacts from @group_name. If some of the @contacts are not in
+ * any other group, add them to the fallback group, or if @group_name *is* the
+ * fallback group, fail without doing anything else. */
+static gboolean
+haze_contact_list_prep_remove_from_group (HazeContactList *self,
+    const gchar *group_name,
+    TpHandleSet *contacts,
+    GError **error)
+{
+  HazeConnection *conn = self->priv->conn;
+  TpBaseConnection *base_conn = TP_BASE_CONNECTION (conn);
+  TpHandleRepoIface *contact_repo = tp_base_connection_get_handles (base_conn,
+      TP_HANDLE_TYPE_CONTACT);
+  PurpleAccount *account = conn->account;
+  PurpleGroup *group = purple_find_group (group_name);
+  TpIntsetFastIter iter;
+  TpHandle handle;
+  TpHandleSet *orphans;
+
+  /* no such group? that was easy, we "already removed them" */
+  if (group == NULL)
+    return TRUE;
+
+  orphans = tp_handle_set_new (contact_repo);
+
+  tp_intset_fast_iter_init (&iter, tp_handle_set_peek (contacts));
+
+  while (tp_intset_fast_iter_next (&iter, &handle))
+    {
+      gboolean is_in = FALSE;
+      gboolean orphaned = TRUE;
+      GSList *buddies;
+      GSList *l;
+      const gchar *bname =
+          haze_connection_handle_inspect (conn, TP_HANDLE_TYPE_CONTACT,
+              handle);
+
+      g_assert (bname != NULL);
+
+      buddies = purple_find_buddies (account, bname);
+
+      for (l = buddies; l != NULL; l = l->next)
+        {
+          PurpleGroup *their_group = purple_buddy_get_group (l->data);
+
+          if (their_group == group)
+            is_in = TRUE;
+          else
+            orphaned = FALSE;
+        }
+
+      if (is_in && orphaned)
+        tp_handle_set_add (orphans, handle);
+
+      g_slist_free (buddies);
+    }
+
+  /* If they're in the group and it's their last group, we need to move
+   * them to the fallback group. If the group they're being removed from *is*
+   * the fallback group, we just fail (before we've actually done anything). */
+  if (!tp_handle_set_is_empty (orphans))
+    {
+      const gchar *def_name = haze_get_fallback_group ();
+      PurpleGroup *default_group = purple_group_new (def_name);
+
+      /* We might have just created that group; libpurple doesn't have
+       * a group-added signal, so tell TpBaseContactList about it */
+      tp_base_contact_list_groups_created ((TpBaseContactList *) self,
+          &def_name, 1);
+
+      if (default_group == group)
+        {
+          g_set_error (error, TP_ERRORS, TP_ERROR_NOT_AVAILABLE,
+              "Contacts can't be removed from '%s' unless they are in "
+              "another group", group->name);
+          return FALSE;
+        }
+
+      tp_intset_fast_iter_init (&iter, tp_handle_set_peek (orphans));
+
+      while (tp_intset_fast_iter_next (&iter, &handle))
+        {
+          const gchar *bname =
+              haze_connection_handle_inspect (conn, TP_HANDLE_TYPE_CONTACT,
+                  handle);
+
+          PurpleBuddy *copy = purple_buddy_new (conn->account, bname, NULL);
+          purple_blist_add_buddy (copy, NULL, default_group, NULL);
+          purple_account_add_buddy (account, copy);
+        }
+    }
+
+  return TRUE;
+}
+
+/* haze_contact_list_prep_remove_from_group() must succeed first. */
+static void
+haze_contact_list_remove_many_from_group (HazeContactList *self,
+    const gchar *group_name,
+    TpHandleSet *contacts)
+{
+  PurpleAccount *account = self->priv->conn->account;
+  PurpleGroup *group = purple_find_group (group_name);
+  TpIntsetFastIter iter;
+  TpHandle handle;
+
+  if (group == NULL)
+    return;
+
+  tp_intset_fast_iter_init (&iter, tp_handle_set_peek (contacts));
+
+  while (tp_intset_fast_iter_next (&iter, &handle))
+    {
+      GSList *buddies;
+      GSList *l;
+      const gchar *bname = haze_connection_handle_inspect (self->priv->conn,
+          TP_HANDLE_TYPE_CONTACT, handle);
+
+      buddies = purple_find_buddies (account, bname);
+
+      /* See if the buddy was in the group more than once, since this is
+       * possible in libpurple... */
+      for (l = buddies; l != NULL; l = l->next)
+        {
+          PurpleGroup *their_group = purple_buddy_get_group (l->data);
+
+          if (their_group == group)
+            {
+              purple_account_remove_buddy (account, l->data, group);
+              purple_blist_remove_buddy (l->data);
+            }
+        }
+    }
+}
+
+gboolean
+haze_contact_list_remove_from_group (HazeContactList *self,
+    const gchar *group_name,
+    TpHandle handle,
+    GError **error)
+{
+  TpBaseConnection *base_conn = TP_BASE_CONNECTION (self->priv->conn);
+  TpHandleRepoIface *contact_repo = tp_base_connection_get_handles (base_conn,
+      TP_HANDLE_TYPE_CONTACT);
+  gboolean ok;
+  TpHandleSet *contacts = tp_handle_set_new_containing (contact_repo, handle);
+
+  ok = haze_contact_list_prep_remove_from_group (self, group_name, contacts,
+      error);
+
+  if (ok)
+    haze_contact_list_remove_many_from_group (self, group_name, contacts);
+
+  tp_handle_set_destroy (contacts);
+  return ok;
+}
+
+static void
+haze_contact_list_mutable_init (TpMutableContactListInterface *vtable)
+{
+  /* we use the default _finish functions, which assume a GSimpleAsyncResult */
+  vtable->request_subscription_async =
+    haze_contact_list_request_subscription_async;
+  vtable->authorize_publication_async =
+    haze_contact_list_authorize_publication_async;
+  vtable->remove_contacts_async = haze_contact_list_remove_contacts_async;
+  /* this is about the best we can do for unsubscribe/unpublish */
+  vtable->unsubscribe_async = haze_contact_list_remove_contacts_async;
+  vtable->unpublish_async = haze_contact_list_remove_contacts_async;
+  vtable->store_contacts_async = haze_contact_list_store_contacts_async;
+  /* assume defaults: can change the contact list, and requests use the
+   * message */
+}
+
+static GStrv
+haze_contact_list_dup_groups (TpBaseContactList *cl G_GNUC_UNUSED)
+{
+  PurpleBlistNode *node;
+  /* borrowed group name => NULL */
+  GHashTable *groups = g_hash_table_new (g_str_hash, g_str_equal);
+  GHashTableIter iter;
+  gpointer k;
+  GPtrArray *arr;
+
+  for (node = purple_blist_get_root ();
+      node != NULL;
+      node = purple_blist_node_next (node, TRUE))
+    {
+      if (purple_blist_node_get_type (node) == PURPLE_BLIST_GROUP_NODE)
+        g_hash_table_insert (groups, PURPLE_GROUP (node)->name, NULL);
+    }
+
+  arr = g_ptr_array_sized_new (g_hash_table_size (groups) + 1);
+
+  g_hash_table_iter_init (&iter, groups);
+
+  while (g_hash_table_iter_next (&iter, &k, NULL))
+    g_ptr_array_add (arr, g_strdup (k));
+
+  g_hash_table_unref (groups);
+  g_ptr_array_add (arr, NULL);
+  return (GStrv) g_ptr_array_free (arr, FALSE);
+}
+
+static GStrv
+haze_contact_list_dup_contact_groups (TpBaseContactList *cl,
+    TpHandle contact)
+{
+  HazeContactList *self = HAZE_CONTACT_LIST (cl);
+  const gchar *bname = haze_connection_handle_inspect (self->priv->conn,
+      TP_HANDLE_TYPE_CONTACT, contact);
+  GSList *buddies, *sl_iter;
+  GPtrArray *arr;
+
+  g_return_val_if_fail (bname != NULL, NULL);
+
+  buddies = purple_find_buddies (self->priv->conn->account, bname);
+
+  arr = g_ptr_array_sized_new (g_slist_length (buddies));
+
+  for (sl_iter = buddies; sl_iter != NULL; sl_iter = sl_iter->next)
+    {
+      PurpleGroup *group = purple_buddy_get_group (sl_iter->data);
+
+      g_ptr_array_add (arr, g_strdup (purple_group_get_name (group)));
+    }
+
+  g_slist_free (buddies);
+  g_ptr_array_add (arr, NULL);
+  return (GStrv) g_ptr_array_free (arr, FALSE);
+}
+
+static TpHandleSet *
+haze_contact_list_dup_group_members (TpBaseContactList *cl,
+    const gchar *group_name)
+{
+  HazeContactList *self = HAZE_CONTACT_LIST (cl);
+  TpBaseConnection *base_conn = TP_BASE_CONNECTION (self->priv->conn);
+  TpHandleRepoIface *contact_repo = tp_base_connection_get_handles (base_conn,
+      TP_HANDLE_TYPE_CONTACT);
+  PurpleGroup *group = purple_find_group (group_name);
+  PurpleBlistNode *contact, *buddy;
+  TpHandleSet *members = tp_handle_set_new (contact_repo);
+
+  if (group == NULL)
+    return members;
+
+  for (contact = purple_blist_node_get_first_child ((PurpleBlistNode *) group);
+      contact != NULL;
+      contact = purple_blist_node_get_sibling_next (contact))
+    {
+      if (G_UNLIKELY (purple_blist_node_get_type (contact) !=
+            PURPLE_BLIST_CONTACT_NODE))
+        {
+          g_warning ("a child of a Group had unexpected type %d",
+              purple_blist_node_get_type (contact));
+          continue;
+        }
+
+      for (buddy = purple_blist_node_get_first_child (contact);
+          buddy != NULL;
+          buddy = purple_blist_node_get_sibling_next (buddy))
+        {
+          const gchar *bname;
+          TpHandle handle;
+
+          if (G_UNLIKELY (purple_blist_node_get_type (buddy) !=
+                PURPLE_BLIST_BUDDY_NODE))
+            {
+              g_warning ("a child of a Contact had unexpected type %d",
+                  purple_blist_node_get_type (buddy));
+              continue;
+            }
+
+          bname = purple_buddy_get_name (PURPLE_BUDDY (buddy));
+          handle = tp_handle_ensure (contact_repo, bname, NULL, NULL);
+
+          if (G_LIKELY (handle != 0))
+            tp_handle_set_add (members, handle);
+        }
+    }
+
+  return members;
+}
+
+static gchar *
+haze_contact_list_normalize_group (TpBaseContactList *cl G_GNUC_UNUSED,
+    const gchar *s)
+{
+  /* By inspection of blist.c: group names are normalized by stripping
+   * unprintable characters, then considering groups that collate to the
+   * same thing in the current locale to be the same group. Empty group names
+   * aren't allowed. */
+  gchar *ret = purple_utf8_strip_unprintables (s);
+  PurpleGroup *group;
+  const gchar *group_name;
+
+  if (tp_str_empty (ret))
+    {
+      g_free (ret);
+      return NULL;
+    }
+
+  group = purple_find_group (ret);
+
+  if (group != NULL)
+    {
+      group_name = purple_group_get_name (group);
+
+      if (tp_strdiff (group_name, ret))
+        {
+          g_free (ret);
+          return g_strdup (group_name);
+        }
+    }
+
+  return ret;
+}
+
+static void
+haze_contact_list_groups_init (TpContactGroupListInterface *vtable)
+{
+  vtable->dup_groups = haze_contact_list_dup_groups;
+  vtable->dup_group_members = haze_contact_list_dup_group_members;
+  vtable->dup_contact_groups = haze_contact_list_dup_contact_groups;
+  vtable->normalize_group = haze_contact_list_normalize_group;
+  /* assume default: groups aren't disjoint */
+}
+
+static void
+haze_contact_list_set_contact_groups_async (TpBaseContactList *cl,
+    TpHandle contact,
+    const gchar * const *names,
+    gsize n_names,
+    GAsyncReadyCallback callback,
+    gpointer user_data)
+{
+  HazeContactList *self = HAZE_CONTACT_LIST (cl);
+  PurpleAccount *account = self->priv->conn->account;
+  const gchar *fallback_group;
+  const gchar *bname = haze_connection_handle_inspect (self->priv->conn,
+      TP_HANDLE_TYPE_CONTACT, contact);
+  gsize i;
+  GSList *buddies, *l;
+
+  g_assert (bname != NULL);
+
+  if (n_names == 0)
+    {
+      /* the contact must be in some group */
+      fallback_group = haze_get_fallback_group ();
+      names = &fallback_group;
+      n_names = 1;
+    }
+
+  /* put them in any groups they ought to be in */
+  for (i = 0; i < n_names; i++)
+    haze_contact_list_add_to_group (self, names[i], contact);
+
+  /* remove them from any groups they ought to not be in */
+  buddies = purple_find_buddies (account, bname);
+
+  for (l = buddies; l != NULL; l = l->next)
+    {
+      PurpleGroup *group = purple_buddy_get_group (l->data);
+      const gchar *group_name = purple_group_get_name (group);
+      gboolean desired = FALSE;
+
+      for (i = 0; i < n_names; i++)
+        {
+          if (tp_strdiff (group_name, names[i]))
+            {
+              desired = TRUE;
+              break;
+            }
+        }
+
+      if (!desired)
+        {
+          purple_account_remove_buddy (account, l->data, group);
+          purple_blist_remove_buddy (l->data);
+        }
+    }
+
+  tp_simple_async_report_success_in_idle ((GObject *) self, callback,
+      user_data, haze_contact_list_set_contact_groups_async);
+}
+
+static void
+haze_contact_list_add_to_group_async (TpBaseContactList *cl,
+    const gchar *group_name,
+    TpHandleSet *contacts,
+    GAsyncReadyCallback callback,
+    gpointer user_data)
+{
+  HazeContactList *self = HAZE_CONTACT_LIST (cl);
+  TpIntsetFastIter iter;
+  TpHandle handle;
+  /* This actually has "ensure" semantics, and doesn't return a ref */
+  PurpleGroup *group = purple_group_new (group_name);
+
+  /* We have to reassure the TpBaseContactList that the group exists,
+   * because libpurple doesn't have a group-added signal */
+  g_assert (group != NULL);
+  tp_base_contact_list_groups_created ((TpBaseContactList *) self,
+      &group_name, 1);
+
+  tp_intset_fast_iter_init (&iter, tp_handle_set_peek (contacts));
+
+  while (tp_intset_fast_iter_next (&iter, &handle))
+    haze_contact_list_add_to_group (self, group_name, handle);
+
+  tp_simple_async_report_success_in_idle ((GObject *) self, callback,
+      user_data, haze_contact_list_add_to_group_async);
+}
+
+static void
+haze_contact_list_remove_from_group_async (TpBaseContactList *cl,
+    const gchar *group_name,
+    TpHandleSet *contacts,
+    GAsyncReadyCallback callback,
+    gpointer user_data)
+{
+  HazeContactList *self = HAZE_CONTACT_LIST (cl);
+  GError *error = NULL;
+
+  if (haze_contact_list_prep_remove_from_group (self, group_name, contacts,
+        &error))
+    {
+      haze_contact_list_remove_many_from_group (self, group_name, contacts);
+      tp_simple_async_report_success_in_idle ((GObject *) cl, callback,
+          user_data, haze_contact_list_remove_from_group_async);
+    }
+  else
+    {
+      g_simple_async_report_gerror_in_idle ((GObject *) cl, callback,
+          user_data, error);
+      g_clear_error (&error);
+    }
+}
+
+static void
+haze_contact_list_remove_group_async (TpBaseContactList *cl,
+    const gchar *group_name,
+    GAsyncReadyCallback callback,
+    gpointer user_data)
+{
+  TpHandleSet *members = haze_contact_list_dup_group_members (cl, group_name);
+  GError *error = NULL;
+
+  if (haze_contact_list_prep_remove_from_group (HAZE_CONTACT_LIST (cl),
+        group_name, members, &error))
+    {
+      PurpleGroup *group = purple_find_group (group_name);
+
+      if (group != NULL)
+        purple_blist_remove_group (group);
+
+      tp_base_contact_list_groups_removed (cl, &group_name, 1);
+
+      tp_simple_async_report_success_in_idle ((GObject *) cl, callback,
+          user_data, haze_contact_list_remove_group_async);
+    }
+  else
+    {
+      g_simple_async_report_gerror_in_idle ((GObject *) cl, callback,
+          user_data, error);
+      g_clear_error (&error);
+    }
+
+  tp_handle_set_destroy (members);
+}
+
+static void
+haze_contact_list_set_group_members_async (TpBaseContactList *cl,
+    const gchar *group_name,
+    TpHandleSet *contacts,
+    GAsyncReadyCallback callback,
+    gpointer user_data)
+{
+  HazeContactList *self = HAZE_CONTACT_LIST (cl);
+  TpHandleSet *outcasts = haze_contact_list_dup_group_members (cl, group_name);
+  GError *error = NULL;
+  /* This actually has "ensure" semantics, and doesn't return a ref.
+   * We do this even if there are no contacts, to create the group as a
+   * side-effect. */
+  PurpleGroup *group = purple_group_new (group_name);
+
+  /* We have to reassure the TpBaseContactList that the group exists,
+   * because libpurple doesn't have a group-added signal */
+  g_assert (group != NULL);
+  tp_base_contact_list_groups_created ((TpBaseContactList *) self,
+      &group_name, 1);
+
+  tp_intset_destroy (tp_handle_set_difference_update (outcasts,
+        tp_handle_set_peek (contacts)));
+
+  if (haze_contact_list_prep_remove_from_group (HAZE_CONTACT_LIST (cl),
+        group_name, outcasts, &error))
+    {
+      haze_contact_list_add_to_group_async (cl, group_name, contacts, callback,
+          user_data);
+      haze_contact_list_remove_many_from_group (self, group_name, outcasts);
+    }
+  else
+    {
+      g_simple_async_report_gerror_in_idle ((GObject *) cl, callback,
+          user_data, error);
+      g_clear_error (&error);
+    }
+}
+
+static void
+haze_contact_list_rename_group_async (TpBaseContactList *cl,
+    const gchar *old_name,
+    const gchar *new_name,
+    GAsyncReadyCallback callback,
+    gpointer user_data)
+{
+  PurpleGroup *group = purple_find_group (old_name);
+  PurpleGroup *other = purple_find_group (new_name);
+
+  if (group == NULL)
+    {
+      g_simple_async_report_error_in_idle ((GObject *) cl, callback,
+          user_data, TP_ERROR, TP_ERROR_DOES_NOT_EXIST,
+          "The group '%s' does not exist", old_name);
+      return;
+    }
+
+  if (other != NULL)
+    {
+      g_simple_async_report_error_in_idle ((GObject *) cl, callback,
+          user_data, TP_ERROR, TP_ERROR_NOT_AVAILABLE,
+          "The group '%s' already exists", new_name);
+      return;
+    }
+
+  purple_blist_rename_group (group, new_name);
+  tp_base_contact_list_group_renamed (cl, old_name, new_name);
+
+  tp_simple_async_report_success_in_idle ((GObject *) cl, callback,
+      user_data, haze_contact_list_rename_group_async);
+}
+
+static void
+haze_contact_list_mutable_groups_init (
+    TpMutableContactGroupListInterface *vtable)
+{
+  /* we use the default _finish functions, which assume a GSimpleAsyncResult */
+  vtable->set_contact_groups_async =
+    haze_contact_list_set_contact_groups_async;
+  vtable->set_group_members_async = haze_contact_list_set_group_members_async;
+  vtable->add_to_group_async = haze_contact_list_add_to_group_async;
+  vtable->remove_from_group_async = haze_contact_list_remove_from_group_async;
+  vtable->remove_group_async = haze_contact_list_remove_group_async;
+  vtable->rename_group_async = haze_contact_list_rename_group_async;
+  /* assume default: groups are stored persistently */
+}
+
+static TpHandleSet *
+dup_blocked_contacts (TpBaseContactList *cl)
+{
+  HazeContactList *self = HAZE_CONTACT_LIST (cl);
+  PurpleAccount *account = self->priv->conn->account;
+  TpBaseConnection *base_conn = TP_BASE_CONNECTION (self->priv->conn);
+  TpHandleRepoIface *contact_repo = tp_base_connection_get_handles (base_conn,
+      TP_HANDLE_TYPE_CONTACT);
+  TpHandleSet *blocked = tp_handle_set_new (contact_repo);
+  GSList *l;
+
+  for (l = account->deny; l != NULL; l = l->next) {
+    TpHandle handle = tp_handle_ensure (contact_repo, l->data, NULL, NULL);
+
+    if (G_LIKELY (handle != 0))
+      tp_handle_set_add (blocked, handle);
+  }
+
+  return blocked;
+}
+
+static void
+set_contacts_privacy (TpBaseContactList *cl,
+    TpHandleSet *contacts,
+    gboolean block)
+{
+  HazeContactList *self = HAZE_CONTACT_LIST (cl);
+  PurpleAccount *account = self->priv->conn->account;
+  TpIntsetFastIter iter;
+  TpHandle handle;
+
+  tp_intset_fast_iter_init (&iter, tp_handle_set_peek (contacts));
+
+  while (tp_intset_fast_iter_next (&iter, &handle))
+    {
+      const gchar *bname = haze_connection_handle_inspect (self->priv->conn,
+          TP_HANDLE_TYPE_CONTACT, handle);
+
+      if (block)
+        purple_privacy_deny (account, bname, FALSE, FALSE);
+      else
+        purple_privacy_allow (account, bname, FALSE, FALSE);
+    }
+}
+
+static void
+block_contacts_async(TpBaseContactList *cl,
+    TpHandleSet *contacts,
+    GAsyncReadyCallback callback,
+    gpointer user_data)
+{
+  set_contacts_privacy (cl, contacts, TRUE);
+
+  tp_simple_async_report_success_in_idle ((GObject *) cl, callback,
+      user_data, block_contacts_async);
+}
+
+static void
+unblock_contacts_async(TpBaseContactList *cl,
+    TpHandleSet *contacts,
+    GAsyncReadyCallback callback,
+    gpointer user_data)
+{
+  set_contacts_privacy (cl, contacts, FALSE);
+
+  tp_simple_async_report_success_in_idle ((GObject *) cl, callback,
+      user_data, unblock_contacts_async);
+}
+
+static gboolean
+can_block (TpBaseContactList *cl)
+{
+  HazeContactList *self = HAZE_CONTACT_LIST (cl);
+
+  return (self->priv->conn->account->gc != NULL &&
+      HAZE_CONNECTION_GET_PRPL_INFO (self->priv->conn)->add_deny != NULL);
+}
+
+static void
+haze_contact_list_blockable_init(
+    TpBlockableContactListInterface *vtable)
+{
+  vtable->dup_blocked_contacts = dup_blocked_contacts;
+  vtable->block_contacts_async = block_contacts_async;
+  vtable->unblock_contacts_async = unblock_contacts_async;
+
+  vtable->can_block = can_block;
+}
+
+static void
+haze_contact_list_deny_changed (
+    PurpleAccount *account,
+    const char *name)
+{
+  HazeConnection *conn = ACCOUNT_GET_HAZE_CONNECTION (account);
+  TpBaseConnection *base_conn = TP_BASE_CONNECTION (conn);
+  TpHandleRepoIface *contact_repo = tp_base_connection_get_handles (base_conn,
+      TP_HANDLE_TYPE_CONTACT);
+  GError *error = NULL;
+  TpHandle handle = tp_handle_ensure (contact_repo, name, NULL, &error);
+  TpHandleSet *set;
+
+  if (handle == 0)
+    {
+      g_warning ("Couldn't normalize id '%s': '%s'", name, error->message);
+      g_clear_error (&error);
+      return;
+    }
+
+  set = tp_handle_set_new_containing (contact_repo, handle);
+  tp_base_contact_list_contact_blocking_changed (
+      TP_BASE_CONTACT_LIST (conn->contact_list),
+      set);
+  g_object_unref (set);
+}
+
+static PurplePrivacyUiOps privacy_ui_ops =
+{
+  /* .permit_added = */ NULL,
+  /* .permit_removed = */ NULL,
+  /* .deny_added = */ haze_contact_list_deny_changed,
+  /* .deny_removed = */ haze_contact_list_deny_changed
+};
+
+PurplePrivacyUiOps *
+haze_get_privacy_ui_ops (void)
+{
+  return &privacy_ui_ops;
 }

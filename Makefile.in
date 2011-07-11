@@ -35,10 +35,10 @@ build_triplet = @build@
 host_triplet = @host@
 DIST_COMMON = README $(am__configure_deps) $(srcdir)/Makefile.am \
 	$(srcdir)/Makefile.in $(srcdir)/config.h.in \
-	$(srcdir)/tools/lcov.am $(top_srcdir)/configure AUTHORS \
-	COPYING ChangeLog INSTALL NEWS build-aux/config.guess \
-	build-aux/config.sub build-aux/depcomp build-aux/install-sh \
-	build-aux/ltmain.sh build-aux/missing
+	$(srcdir)/tools/lcov.am $(srcdir)/tools/telepathy.am \
+	$(top_srcdir)/configure AUTHORS COPYING ChangeLog INSTALL NEWS \
+	build-aux/config.guess build-aux/config.sub build-aux/depcomp \
+	build-aux/install-sh build-aux/ltmain.sh build-aux/missing
 subdir = .
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/as-compiler-flag.m4 \
@@ -133,6 +133,7 @@ DBUS_GLIB_CFLAGS = @DBUS_GLIB_CFLAGS@
 DBUS_GLIB_LIBS = @DBUS_GLIB_LIBS@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
+DLLTOOL = @DLLTOOL@
 DSYMUTIL = @DSYMUTIL@
 DUMPBIN = @DUMPBIN@
 ECHO_C = @ECHO_C@
@@ -162,6 +163,7 @@ LIPO = @LIPO@
 LN_S = @LN_S@
 LTLIBOBJS = @LTLIBOBJS@
 MAKEINFO = @MAKEINFO@
+MANIFEST_TOOL = @MANIFEST_TOOL@
 MKDIR_P = @MKDIR_P@
 NM = @NM@
 NMEDIT = @NMEDIT@
@@ -194,8 +196,6 @@ SHELL = @SHELL@
 STRIP = @STRIP@
 TEST_PYTHON = @TEST_PYTHON@
 TP_GLIB_CFLAGS = @TP_GLIB_CFLAGS@
-TP_GLIB_FOR_MAIL_NOTIFICATION_CFLAGS = @TP_GLIB_FOR_MAIL_NOTIFICATION_CFLAGS@
-TP_GLIB_FOR_MAIL_NOTIFICATION_LIBS = @TP_GLIB_FOR_MAIL_NOTIFICATION_LIBS@
 TP_GLIB_LIBS = @TP_GLIB_LIBS@
 VERSION = @VERSION@
 XSLTPROC = @XSLTPROC@
@@ -203,6 +203,7 @@ abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
 abs_top_srcdir = @abs_top_srcdir@
+ac_ct_AR = @ac_ct_AR@
 ac_ct_CC = @ac_ct_CC@
 ac_ct_DUMPBIN = @ac_ct_DUMPBIN@
 am__include = @am__include@
@@ -235,7 +236,6 @@ libdir = @libdir@
 libexecdir = @libexecdir@
 localedir = @localedir@
 localstatedir = @localstatedir@
-lt_ECHO = @lt_ECHO@
 mandir = @mandir@
 mkdir_p = @mkdir_p@
 oldincludedir = @oldincludedir@
@@ -264,7 +264,7 @@ all: config.h
 .SUFFIXES:
 am--refresh:
 	@:
-$(srcdir)/Makefile.in:  $(srcdir)/Makefile.am $(srcdir)/tools/lcov.am $(am__configure_deps)
+$(srcdir)/Makefile.in:  $(srcdir)/Makefile.am $(srcdir)/tools/lcov.am $(srcdir)/tools/telepathy.am $(am__configure_deps)
 	@for dep in $?; do \
 	  case '$(am__configure_deps)' in \
 	    *$$dep*) \
@@ -518,6 +518,9 @@ distdir: $(DISTFILES)
 	      || exit 1; \
 	  fi; \
 	done
+	$(MAKE) $(AM_MAKEFLAGS) \
+	  top_distdir="$(top_distdir)" distdir="$(distdir)" \
+	  dist-hook
 	-test -n "$(am__skip_mode_fix)" \
 	|| find "$(distdir)" -type d ! -perm -755 \
 		-exec chmod u+rwx,go+rx {} \; -o \
@@ -585,6 +588,7 @@ distcheck: dist
 	test -d $(distdir)/_build || exit 0; \
 	dc_install_base=`$(am__cd) $(distdir)/_inst && pwd | sed -e 's,^[^:\\/]:[\\/],/,'` \
 	  && dc_destdir="$${TMPDIR-/tmp}/am-dc-$$$$/" \
+	  && $(MAKE) $(AM_MAKEFLAGS) distcheck-hook \
 	  && am__cwd=`pwd` \
 	  && $(am__cd) $(distdir)/_build \
 	  && ../configure --srcdir=.. --prefix="$$dc_install_base" \
@@ -739,8 +743,8 @@ uninstall-am:
 .PHONY: $(RECURSIVE_CLEAN_TARGETS) $(RECURSIVE_TARGETS) CTAGS GTAGS \
 	all all-am am--refresh check check-am clean clean-generic \
 	clean-libtool ctags ctags-recursive dist dist-all dist-bzip2 \
-	dist-gzip dist-lzma dist-shar dist-tarZ dist-xz dist-zip \
-	distcheck distclean distclean-generic distclean-hdr \
+	dist-gzip dist-hook dist-lzma dist-shar dist-tarZ dist-xz \
+	dist-zip distcheck distclean distclean-generic distclean-hdr \
 	distclean-libtool distclean-tags distcleancheck distdir \
 	distuninstallcheck dvi dvi-am html html-am info info-am \
 	install install-am install-data install-data-am install-dvi \
@@ -774,6 +778,72 @@ lcov-check:
 	$(MAKE) lcov-reset
 	$(MAKE) check $(LCOV_CHECK_ARGS)
 	$(MAKE) lcov-report
+
+dist-hook:
+	chmod u+w ${distdir}/ChangeLog
+	if test -d ${top_srcdir}/.git; then \
+		git log --date=iso $(CHANGELOG_RANGE) > ${distdir}/ChangeLog; \
+	fi
+
+distcheck-hook:
+	@test "z$(CHECK_FOR_UNRELEASED)" = z || \
+	case @VERSION@ in \
+		*.*.*.*|*+) ;; \
+		*) \
+			if grep -r UNRELEASED $(CHECK_FOR_UNRELEASED); \
+			then \
+				echo "^^^ This is meant to be a release, but some files say UNRELEASED" >&2; \
+				exit 2; \
+			fi \
+			;; \
+	esac
+
+_is-release-check:
+	@case @VERSION@ in \
+		(*.*.*.*|*+) \
+			echo "Hey! @VERSION@ is not a release!" >&2; \
+			exit 2; \
+			;; \
+	esac
+	@if ! git diff --no-ext-diff --quiet --exit-code; then \
+		echo "Hey! Your tree is dirty! No release for you." >&2; \
+		exit 2; \
+	fi
+	@if ! git diff --cached --no-ext-diff --quiet --exit-code; then \
+		echo "Hey! You have changes staged! No release for you." >&2; \
+		exit 2; \
+	fi
+
+%.tar.gz.asc: %.tar.gz
+	$(AM_V_GEN)gpg --detach-sign --armor $@
+
+@PACKAGE@-@VERSION@.tar.gz: _is-release-check check distcheck
+
+maintainer-prepare-release: _is-release-check check distcheck release-mail
+	git tag -s @PACKAGE@-@VERSION@ -m @PACKAGE@' '@VERSION@
+	gpg --detach-sign --armor @PACKAGE@-@VERSION@.tar.gz
+
+release-mail: NEWS
+	$(AM_V_GEN)(python $(top_srcdir)/tools/make-release-mail.py \
+		@PACKAGE@ @VERSION@ $(top_srcdir)/NEWS > $@.tmp && \
+		mv $@.tmp $@)
+
+maintainer-upload-release: _maintainer-upload-release
+
+_maintainer-upload-release-check: _is-release-check
+	test -f @PACKAGE@-@VERSION@.tar.gz
+	test -f @PACKAGE@-@VERSION@.tar.gz.asc
+	gpg --verify @PACKAGE@-@VERSION@.tar.gz.asc
+
+_maintainer-upload-release: _maintainer-upload-release-check
+	rsync -vzP @PACKAGE@-@VERSION@.tar.gz telepathy.freedesktop.org:/srv/telepathy.freedesktop.org/www/releases/@PACKAGE@/@PACKAGE@-@VERSION@.tar.gz
+	rsync -vzP @PACKAGE@-@VERSION@.tar.gz.asc telepathy.freedesktop.org:/srv/telepathy.freedesktop.org/www/releases/@PACKAGE@/@PACKAGE@-@VERSION@.tar.gz.asc
+
+maintainer-make-release: maintainer-prepare-release maintainer-upload-release
+	@echo "Now:"
+	@echo " • bump the nano-version;"
+	@echo " • push the branch and tags upstream; and"
+	@echo " • send release-mail to <telepathy@lists.freedesktop.org>."
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

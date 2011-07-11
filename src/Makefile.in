@@ -35,10 +35,6 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 libexec_PROGRAMS = telepathy-haze$(EXEEXT)
-@ENABLE_MAIL_NOTIFICATION_TRUE@am__append_1 = \
-@ENABLE_MAIL_NOTIFICATION_TRUE@                         connection-mail.h \
-@ENABLE_MAIL_NOTIFICATION_TRUE@                         connection-mail.c
-
 subdir = src
 DIST_COMMON = $(srcdir)/Makefile.am $(srcdir)/Makefile.in
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
@@ -62,28 +58,25 @@ am__telepathy_haze_SOURCES_DIST = main.c defines.h debug.c debug.h \
 	connection-aliasing.c connection-aliasing.h \
 	connection-avatars.c connection-avatars.h \
 	connection-capabilities.c connection-capabilities.h \
-	connection-presence.c connection-presence.h connection.c \
-	connection.h contact-list.c contact-list.h \
-	contact-list-channel.c contact-list-channel.h im-channel.h \
-	im-channel.c im-channel-factory.c im-channel-factory.h \
-	notify.c notify.h request.c request.h util.c util.h \
-	media-backend.c media-backend.h media-channel.c \
-	media-channel.h media-manager.c media-manager.h media-stream.c \
-	media-stream.h connection-mail.h connection-mail.c
+	connection-presence.c connection-presence.h connection-mail.h \
+	connection-mail.c connection.c connection.h contact-list.c \
+	contact-list.h im-channel.h im-channel.c im-channel-factory.c \
+	im-channel-factory.h notify.c notify.h protocol.c protocol.h \
+	request.c request.h util.c util.h media-backend.c \
+	media-backend.h media-channel.c media-channel.h \
+	media-manager.c media-manager.h media-stream.c media-stream.h
 @MEDIA_ENABLED_TRUE@am__objects_1 = media-backend.$(OBJEXT) \
 @MEDIA_ENABLED_TRUE@	media-channel.$(OBJEXT) \
 @MEDIA_ENABLED_TRUE@	media-manager.$(OBJEXT) \
 @MEDIA_ENABLED_TRUE@	media-stream.$(OBJEXT)
-@ENABLE_MAIL_NOTIFICATION_TRUE@am__objects_2 =  \
-@ENABLE_MAIL_NOTIFICATION_TRUE@	connection-mail.$(OBJEXT)
 am_telepathy_haze_OBJECTS = main.$(OBJEXT) debug.$(OBJEXT) \
 	connection-manager.$(OBJEXT) connection-aliasing.$(OBJEXT) \
 	connection-avatars.$(OBJEXT) connection-capabilities.$(OBJEXT) \
-	connection-presence.$(OBJEXT) connection.$(OBJEXT) \
-	contact-list.$(OBJEXT) contact-list-channel.$(OBJEXT) \
+	connection-presence.$(OBJEXT) connection-mail.$(OBJEXT) \
+	connection.$(OBJEXT) contact-list.$(OBJEXT) \
 	im-channel.$(OBJEXT) im-channel-factory.$(OBJEXT) \
-	notify.$(OBJEXT) request.$(OBJEXT) util.$(OBJEXT) \
-	$(am__objects_1) $(am__objects_2)
+	notify.$(OBJEXT) protocol.$(OBJEXT) request.$(OBJEXT) \
+	util.$(OBJEXT) $(am__objects_1)
 telepathy_haze_OBJECTS = $(am_telepathy_haze_OBJECTS)
 telepathy_haze_DEPENDENCIES =  \
 	$(top_builddir)/extensions/libhaze-extensions.la
@@ -163,6 +156,7 @@ DBUS_GLIB_CFLAGS = @DBUS_GLIB_CFLAGS@
 DBUS_GLIB_LIBS = @DBUS_GLIB_LIBS@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
+DLLTOOL = @DLLTOOL@
 DSYMUTIL = @DSYMUTIL@
 DUMPBIN = @DUMPBIN@
 ECHO_C = @ECHO_C@
@@ -192,6 +186,7 @@ LIPO = @LIPO@
 LN_S = @LN_S@
 LTLIBOBJS = @LTLIBOBJS@
 MAKEINFO = @MAKEINFO@
+MANIFEST_TOOL = @MANIFEST_TOOL@
 MKDIR_P = @MKDIR_P@
 NM = @NM@
 NMEDIT = @NMEDIT@
@@ -224,8 +219,6 @@ SHELL = @SHELL@
 STRIP = @STRIP@
 TEST_PYTHON = @TEST_PYTHON@
 TP_GLIB_CFLAGS = @TP_GLIB_CFLAGS@
-TP_GLIB_FOR_MAIL_NOTIFICATION_CFLAGS = @TP_GLIB_FOR_MAIL_NOTIFICATION_CFLAGS@
-TP_GLIB_FOR_MAIL_NOTIFICATION_LIBS = @TP_GLIB_FOR_MAIL_NOTIFICATION_LIBS@
 TP_GLIB_LIBS = @TP_GLIB_LIBS@
 VERSION = @VERSION@
 XSLTPROC = @XSLTPROC@
@@ -233,6 +226,7 @@ abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
 abs_top_srcdir = @abs_top_srcdir@
+ac_ct_AR = @ac_ct_AR@
 ac_ct_CC = @ac_ct_CC@
 ac_ct_DUMPBIN = @ac_ct_DUMPBIN@
 am__include = @am__include@
@@ -265,7 +259,6 @@ libdir = @libdir@
 libexecdir = @libexecdir@
 localedir = @localedir@
 localstatedir = @localstatedir@
-lt_ECHO = @lt_ECHO@
 mandir = @mandir@
 mkdir_p = @mkdir_p@
 oldincludedir = @oldincludedir@
@@ -298,17 +291,40 @@ CLEANFILES = $(man_MANS)
 @MEDIA_ENABLED_TRUE@                     media-stream.c \
 @MEDIA_ENABLED_TRUE@                     media-stream.h
 
-telepathy_haze_SOURCES = main.c defines.h debug.c debug.h \
-	connection-manager.c connection-manager.h \
-	connection-aliasing.c connection-aliasing.h \
-	connection-avatars.c connection-avatars.h \
-	connection-capabilities.c connection-capabilities.h \
-	connection-presence.c connection-presence.h connection.c \
-	connection.h contact-list.c contact-list.h \
-	contact-list-channel.c contact-list-channel.h im-channel.h \
-	im-channel.c im-channel-factory.c im-channel-factory.h \
-	notify.c notify.h request.c request.h util.c util.h \
-	$(haze_media_sources) $(am__append_1)
+telepathy_haze_SOURCES = main.c \
+                         defines.h \
+                         debug.c \
+                         debug.h \
+                         connection-manager.c \
+                         connection-manager.h \
+                         connection-aliasing.c \
+                         connection-aliasing.h \
+                         connection-avatars.c \
+                         connection-avatars.h \
+                         connection-capabilities.c \
+                         connection-capabilities.h \
+                         connection-presence.c \
+                         connection-presence.h \
+                         connection-mail.h \
+                         connection-mail.c \
+                         connection.c \
+                         connection.h \
+                         contact-list.c \
+                         contact-list.h \
+                         im-channel.h \
+                         im-channel.c \
+                         im-channel-factory.c \
+                         im-channel-factory.h \
+                         notify.c \
+                         notify.h \
+                         protocol.c \
+                         protocol.h \
+                         request.c \
+                         request.h \
+                         util.c \
+                         util.h \
+                         $(haze_media_sources)
+
 telepathy_haze_LDADD = $(top_builddir)/extensions/libhaze-extensions.la
 AM_CFLAGS = \
 	-I$(top_srcdir) \
@@ -415,7 +431,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/connection-manager.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/connection-presence.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/connection.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/contact-list-channel.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/contact-list.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/debug.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/im-channel-factory.Po@am__quote@
@@ -426,6 +441,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/media-manager.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/media-stream.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/notify.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/protocol.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/request.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/util.Po@am__quote@
 

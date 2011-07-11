@@ -1,3 +1,46 @@
+telepathy-haze 0.5.0 (2011-07-09)
+=================================
+
+The “paving stones” release. Please enjoy the fruits of 11 months'
+sporadic development.
+
+Dependencies:
+
+• telepathy-glib ≥ 0.13.9 is now required.
+
+• libpurple ≥ 2.7.0 is now required.
+
+Enhancements:
+
+ • fd.o #19902: use TpBaseContactList to implement Conn.I.ContactList,
+   Conn.I.ContactGroups, and the stored list (smcv)
+
+ • fd.o #37933: implement contact blocking (Jasper St. Pierre, wjt)
+
+ • fd.o #13124: support setting your own alias (Felipe Contreras)
+
+ • The Telepathy API to allow the user not to save their password is now
+   implemented. (Jonny)
+
+Fixes:
+
+ • haze no longer ships with a manager file. (jonny)
+
+ • Map PURPLE_CONNECTION_ERROR_OTHER_ERROR to AuthenticationFailed,
+   since it's used for errors like being temporarily banned from the
+   ICQ server, which should result in Mission Control not trying to
+   reconnect (wjt)
+
+ • fd.o #31846: translate the Jabber connection_security parameter in
+   newer libpurple versions into two booleans, old-ssl and
+   require-encryption (smcv)
+
+ • fd.o #26155: make telepathy-glib criticals fatal by default (smcv)
+
+ • fd.o #30594: don't claim that ICQ (and other) contacts support audio
+   calls when they aren't even supported at all by libpurple on the
+   protocol (Guillaume)
+
 telepathy-haze 0.4.0 (2010-08-05)
 =================================
 

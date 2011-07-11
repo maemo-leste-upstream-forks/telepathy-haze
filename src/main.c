@@ -145,6 +145,7 @@ haze_ui_init (void)
     purple_request_set_ui_ops (haze_request_get_ui_ops ());
 #endif
     purple_notify_set_ui_ops (haze_notify_get_ui_ops ());
+    purple_privacy_set_ui_ops (haze_get_privacy_ui_ops ());
 }
 
 static PurpleCoreUiOps haze_core_uiops = 
@@ -232,6 +233,9 @@ get_cm (void)
     fatal_mask = g_log_set_always_fatal (G_LOG_FATAL_MASK);
     fatal_mask &= ~G_LOG_LEVEL_CRITICAL;
     g_log_set_always_fatal (fatal_mask);
+
+    g_log_set_fatal_mask ("tp-glib",
+        g_log_set_fatal_mask ("tp-glib", 0) | G_LOG_LEVEL_CRITICAL);
 
     return (TpBaseConnectionManager *) g_object_new (HAZE_TYPE_CONNECTION_MANAGER, NULL);
 }
