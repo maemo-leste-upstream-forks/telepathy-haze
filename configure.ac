@@ -7,7 +7,7 @@ AC_PREREQ([2.59])
 #  set nano_version to 1
 
 m4_define([haze_major_version], [0])
-m4_define([haze_minor_version], [5])
+m4_define([haze_minor_version], [6])
 m4_define([haze_micro_version], [0])
 m4_define([haze_nano_version], [0])
 
@@ -34,7 +34,7 @@ AC_CONFIG_FILES([Makefile
 		 tests/twisted/Makefile
 		 tools/Makefile
 		 extensions/Makefile
-                 ])
+		 ])
 
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES])
 
@@ -72,7 +72,7 @@ AC_ARG_ENABLE(leaky-request-stubs,
 AC_SUBST(ENABLE_LEAKY_REQUEST_STUBS)
 
 PKG_CHECK_MODULES(PURPLE,[purple >= 2.7])
-PKG_CHECK_MODULES(TP_GLIB,[telepathy-glib >= 0.13.9])
+PKG_CHECK_MODULES(TP_GLIB,[telepathy-glib >= 0.15.1])
 PKG_CHECK_MODULES(GLIB,[glib-2.0 >= 2.22, gobject-2.0, gio-2.0])
 PKG_CHECK_MODULES(DBUS_GLIB,[dbus-glib-1 >= 0.73])
 

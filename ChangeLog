@@ -1,3 +1,67 @@
+commit ec9c21b47860fb75cd7a13fe57b9ed44be4a451d
+Author: Jonny Lamb <jonny.lamb@collabora.co.uk>
+Date:   2012-04-04 15:58:56 -0400
+
+    version 0.6.0
+    
+    Signed-off-by: Jonny Lamb <jonny.lamb@collabora.co.uk>
+
+commit f1613a45ff8ac54f3a42f11ed323a9ee2007c2c0
+Author: Jonny Lamb <jonny.lamb@collabora.co.uk>
+Date:   2012-04-04 15:58:31 -0400
+
+    update NEWS for 0.6.0
+    
+    Signed-off-by: Jonny Lamb <jonny.lamb@collabora.co.uk>
+
+commit 7382c56a6e02c7d0e4ae03ce325b85155b392d11
+Author: Felipe Contreras <felipe.contreras@gmail.com>
+Date:   2009-12-19 20:20:28 +0200
+
+    configure.ac: trivial cleanups
+    
+    Signed-off-by: Felipe Contreras <felipe.contreras@gmail.com>
+    
+    https://bugs.freedesktop.org/show_bug.cgi?id=26120
+
+commit f34f9d3dd637aa96a8134ef834109b29b7024edf
+Author: Will Thompson <will.thompson@collabora.co.uk>
+Date:   2011-11-21 14:33:11 +0000
+
+    connect/fail.py: try an even more ludicrous port
+    
+    This test fails on the buildbot, and I don't know why.
+
+commit 98209cce2ab939a2aa95bb830e1015c54fb892eb
+Author: Will Thompson <will.thompson@collabora.co.uk>
+Date:   2011-11-21 14:30:29 +0000
+
+    Mangle test name into connection parameters.
+    
+    In Gabble, we push the name of the test being run into the connection
+    parameters by abusing the fact that Gabble accepts a resource as part of
+    the 'account' parameter, but overrides it with the value of the
+    'resource' parameter. Haze doesn't have a resource parameter, so we
+    can't use that trick… so, instead, let's shove it into the file transfer
+    proxy list parameter.
+
+commit 9a6de298a8d384b2ae6f5d2608d1ab385301b746
+Author: Will Thompson <will.thompson@collabora.co.uk>
+Date:   2011-08-09 09:28:03 +0200
+
+    Connection: implement ContactBlocking
+    
+    We need to depend on telepathy-glib ≥ 0.15.1 to use
+    tp_base_contact_list_mixin_blocking_iface_init.
+    
+    Reviewed-by: Guillaume Desmottes <guillaume.desmottes@collabora.co.uk>
+
+commit 7041b8500d701fb7d51ab1c9b96aa87a29af15b5
+Author: Will Thompson <will.thompson@collabora.co.uk>
+Date:   2011-07-09 11:42:34 +0100
+
+    Bump nano version to 0.5.0.1
+
 commit 91ad5f246f8831bdfe42817fee1ac4f3e99643a4
 Author: Will Thompson <will.thompson@collabora.co.uk>
 Date:   2011-07-09 11:41:00 +0100
