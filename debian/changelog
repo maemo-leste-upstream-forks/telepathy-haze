@@ -5,8 +5,9 @@ telepathy-haze (0.6.0-1) UNRELEASED; urgency=low
   * debian/control:
     - Bump Standards-Version to 3.9.3 (no further changes)
     - Correct grammar in description (Closes: #653343)
+    - List the different protocols supported by libpurple (Closes: #624186)
 
- -- Laurent Bigonville <bigon@debian.org>  Sat, 07 Apr 2012 15:29:24 +0200
+ -- Laurent Bigonville <bigon@debian.org>  Sat, 07 Apr 2012 16:06:20 +0200
 
 telepathy-haze (0.5.0-1) unstable; urgency=low
 
