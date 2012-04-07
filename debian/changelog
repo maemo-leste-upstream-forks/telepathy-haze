@@ -2,8 +2,9 @@ telepathy-haze (0.6.0-1) UNRELEASED; urgency=low
 
   * New upstream release
     - Bump libtelepathy-glib-dev build-dependency
+  * debian/control: Bump Standards-Version to 3.9.3 (no further changes)
 
- -- Laurent Bigonville <bigon@debian.org>  Sat, 07 Apr 2012 15:20:36 +0200
+ -- Laurent Bigonville <bigon@debian.org>  Sat, 07 Apr 2012 15:21:44 +0200
 
 telepathy-haze (0.5.0-1) unstable; urgency=low
 
