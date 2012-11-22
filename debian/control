@@ -30,3 +30,11 @@ Description: Telepathy connection manager that uses libpurple
  .
  Libpurple supports many different protocols, including
  AIM, Windows Live (MSN), Yahoo!, Gadu-Gadu, Groupwise and ICQ.
+
+Package: telepathy-haze-dbg
+Architecture: any
+Depends: telepathy-haze (= ${binary:Version}),
+         ${misc:Depends}
+Description: Telepathy connection manager that uses libpurple - debug symbols
+ Haze is a Telepathy connection manager based on libpurple.
+ This package contains separate debugging symbols.
