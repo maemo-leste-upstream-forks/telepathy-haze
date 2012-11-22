@@ -25,8 +25,8 @@ Depends: ${shlibs:Depends},
 Provides: telepathy-connection-manager
 Description: Telepathy connection manager that uses libpurple
  Haze is a Telepathy connection manager based on libpurple.
- This allows Telepathy based applications to connect to all protocols
- supported by libpurple (pidgin).
+ This allows Telepathy-based applications to connect to all protocols
+ supported by libpurple (Pidgin).
  .
- Libpurple is supporting many different protocols, including:
- AIM, Windows Live (MSN), Yahoo! Gadu-Gadu, Groupwise and ICQ.
+ Libpurple supports many different protocols, including
+ AIM, Windows Live (MSN), Yahoo!, Gadu-Gadu, Groupwise and ICQ.
