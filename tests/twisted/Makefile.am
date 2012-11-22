@@ -1,5 +1,6 @@
 TWISTED_TESTS = \
 	avatar-requirements.py \
+	simple-caps.py \
 	cm/protocols.py \
 	connect/fail.py \
 	connect/success.py \
@@ -42,4 +43,17 @@ EXTRA_DIST = \
 	servicetest.py \
 	ns.py
 
-CLEANFILES = *.pyc */*.pyc
+if MEDIA_ENABLED
+MEDIA_ENABLED_PYBOOL = True
+else
+MEDIA_ENABLED_PYBOOL = False
+endif
+
+config.py: Makefile
+	$(AM_V_GEN) { \
+		echo "MEDIA_ENABLED = $(MEDIA_ENABLED_PYBOOL)"; \
+	} > $@
+
+BUILT_SOURCES = config.py
+
+CLEANFILES = *.pyc */*.pyc config.py

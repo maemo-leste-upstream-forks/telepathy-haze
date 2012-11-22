@@ -1,3 +1,144 @@
+commit b232ad1cc35037f6ec18b59c194f8c5444f3fad1
+Author: Will Thompson <will.thompson@collabora.co.uk>
+Date:   2012-11-21 17:11:25 +0000
+
+    Version 0.7.0
+
+commit f7ce27e8524f80ffecaabeed8f211932a976cd1e
+Author: Will Thompson <will.thompson@collabora.co.uk>
+Date:   2012-11-21 17:10:08 +0000
+
+    NEWS for 0.7.0
+
+commit 156316d1cfd2fb36311882a0ca0ed569893878da
+Author: Gabriele Giacone <1o5g4r8o@gmail.com>
+Date:   2012-11-21 16:44:12 +0000
+
+    Add skype-x11 to known protocols, rename the other to skype-dbus
+    
+    I'd like having both so users can test both, like on pidgin. linux skype
+    apis often are broken, one could be better than the other.
+    
+    Signed-off-by: Will Thompson <will.thompson@collabora.co.uk>
+
+commit 3d4b6b41f6994b2c90890e8ba7bac53e947343f6
+Author: Gabriele Giacone <1o5g4r8o@gmail.com>
+Date:   2012-11-17 18:16:16 +0000
+
+    Expose third-party Skype prpl as 'skype'
+    
+    Fixes: https://bugs.freedesktop.org/show_bug.cgi?id=57201
+    Signed-off-by: Will Thompson <will.thompson@collabora.co.uk>
+
+commit 3915dbc1d2d343cbeed93e1453daba94860a875a
+Author: Xavier Claessens <xavier.claessens@collabora.co.uk>
+Date:   2012-05-10 15:23:29 +0200
+
+    Remove deprecated tp_handle_ref/unref
+
+commit c0d9beb94395120401bf632cf3277d37a63b0b99
+Author: Simon McVittie <simon.mcvittie@collabora.co.uk>
+Date:   2012-05-07 19:28:33 +0100
+
+    Set G_MESSAGES_DEBUG during testing
+    
+    The same as Gabble commit cbfa9d06.
+
+commit bab2be17b5c6af95b7a990038a1978454829b511
+Author: Simon McVittie <simon.mcvittie@collabora.co.uk>
+Date:   2012-05-07 18:02:06 +0100
+
+    Use non-deprecated TpMessage APIs
+
+commit eb516a9909fe271e40b91df9d7f9cc12a83c2422
+Author: Simon McVittie <simon.mcvittie@collabora.co.uk>
+Date:   2012-05-07 17:37:15 +0100
+
+    Use non-deprecated TpIntset APIs
+
+commit 4c9eaa898b14442d23d3d485c2725af978b35da4
+Author: Simon McVittie <simon.mcvittie@collabora.co.uk>
+Date:   2012-05-07 17:36:21 +0100
+
+    Use TP_ERRORS instead of deprecated TP_ERROR
+
+commit d81cdd5171afb380bdf862b63ddd1858818f0523
+Author: Jonny Lamb <jonny.lamb@collabora.co.uk>
+Date:   2012-05-02 12:16:13 +0100
+
+    caps test: do a simple test for media caps changes
+    
+    Signed-off-by: Jonny Lamb <jonny.lamb@collabora.co.uk>
+
+commit ad7122d60c70ba106661a0b0ecd58e36420d46d5
+Author: Jonny Lamb <jonny.lamb@collabora.co.uk>
+Date:   2012-05-02 12:15:39 +0100
+
+    twisted tests: add a config module for knowing whether media is enabled
+    
+    Signed-off-by: Jonny Lamb <jonny.lamb@collabora.co.uk>
+
+commit 41b053cdcc220687506d8922e129ef759d70fddb
+Author: Jonny Lamb <jonny.lamb@collabora.co.uk>
+Date:   2012-05-02 11:36:36 +0100
+
+    capabilities: implement UpdateCapabilities
+    
+    I didn't bother touching AdvertiseCapabilities as old style caps are
+    only going to be removed soon.
+    
+    Signed-off-by: Jonny Lamb <jonny.lamb@collabora.co.uk>
+
+commit 1fafed8d0efac5075e7d681a9f80962ae0a8b3a3
+Author: Jonny Lamb <jonny.lamb@collabora.co.uk>
+Date:   2012-05-01 13:45:05 +0100
+
+    capabilities: emit ContactCapabilityChanged where appropriate
+    
+    Signed-off-by: Jonny Lamb <jonny.lamb@collabora.co.uk>
+
+commit 59922b9aedd0fc0e24d73a563a3806291672d213
+Author: Jonny Lamb <jonny.lamb@collabora.co.uk>
+Date:   2012-05-01 12:00:51 +0100
+
+    capabilities: implement Media for contact caps
+    
+    It's untested... bad me.
+    
+    Signed-off-by: Jonny Lamb <jonny.lamb@collabora.co.uk>
+
+commit e851e224d7a733acc67f031c8c3b900e78d7dea5
+Author: Jonny Lamb <jonny.lamb@collabora.co.uk>
+Date:   2012-05-01 11:07:00 +0100
+
+    tests: add simple test to ensure ContactCapabilities are working
+    
+    Signed-off-by: Jonny Lamb <jonny.lamb@collabora.co.uk>
+
+commit 04909550618339a33f6a5b40ac5e6176ca280972
+Author: Jonny Lamb <jonny.lamb@collabora.co.uk>
+Date:   2012-05-01 11:06:42 +0100
+
+    capabilities: implement ContactCapabilities
+    
+    Signed-off-by: Jonny Lamb <jonny.lamb@collabora.co.uk>
+
+commit 9379255451b6a4d805d070ee2eb4bca80f9a7993
+Author: Jonny Lamb <jonny.lamb@collabora.co.uk>
+Date:   2012-04-04 16:00:41 -0400
+
+    start on version 0.7.0
+    
+    Signed-off-by: Jonny Lamb <jonny.lamb@collabora.co.uk>
+
+commit 7af2f4947add8a20ba81f96213594b0012492327
+Author: Jonny Lamb <jonny.lamb@collabora.co.uk>
+Date:   2012-04-04 16:00:18 -0400
+
+    start on version 0.6.1
+    
+    Signed-off-by: Jonny Lamb <jonny.lamb@collabora.co.uk>
+
 commit ec9c21b47860fb75cd7a13fe57b9ed44be4a451d
 Author: Jonny Lamb <jonny.lamb@collabora.co.uk>
 Date:   2012-04-04 15:58:56 -0400
