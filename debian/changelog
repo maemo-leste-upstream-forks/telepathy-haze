@@ -4,6 +4,7 @@ telepathy-haze (0.7.0-1) UNRELEASED; urgency=low
   * New upstream release
     - renames Skype prpls to something less horrible (Closes: #693456)
   * Improve long Description (Closes: #685488)
+  * Switch to debhelper 9
 
  -- Simon McVittie <smcv@debian.org>  Thu, 22 Nov 2012 16:06:11 +0000
 
