@@ -75,6 +75,8 @@ G_DEFINE_TYPE_WITH_CODE(HazeConnection,
         haze_connection_aliasing_iface_init);
     G_IMPLEMENT_INTERFACE (TP_TYPE_SVC_CONNECTION_INTERFACE_AVATARS,
         haze_connection_avatars_iface_init);
+    G_IMPLEMENT_INTERFACE (TP_TYPE_SVC_CONNECTION_INTERFACE_CONTACT_CAPABILITIES,
+        haze_connection_contact_capabilities_iface_init);
     G_IMPLEMENT_INTERFACE (TP_TYPE_SVC_CONNECTION_INTERFACE_CAPABILITIES,
         haze_connection_capabilities_iface_init);
     G_IMPLEMENT_INTERFACE (TP_TYPE_SVC_CONNECTION_INTERFACE_CONTACTS,
@@ -105,6 +107,7 @@ static const gchar * implemented_interfaces[] = {
     TP_IFACE_CONNECTION_INTERFACE_PRESENCE,
     TP_IFACE_CONNECTION_INTERFACE_SIMPLE_PRESENCE,
     TP_IFACE_CONNECTION_INTERFACE_CAPABILITIES,
+    TP_IFACE_CONNECTION_INTERFACE_CONTACT_CAPABILITIES,
     TP_IFACE_CONNECTION_INTERFACE_CONTACTS,
     /* TODO: This is a lie.  Not all protocols supported by libpurple
      *       actually have the concept of a user-settable alias, but
@@ -387,7 +390,7 @@ set_option (
  * constructors can't fail.
  *
  * Returns: %TRUE if the account was successfully created and hooked up;
- *          %FALSE with @error set in the TP_ERRORS domain if the account
+ *          %FALSE with @error set in the TP_ERROR domain if the account
  *          already existed or another error occurred.
  */
 gboolean
@@ -403,7 +406,7 @@ haze_connection_create_account (HazeConnection *self,
 
     if (purple_accounts_find (priv->username, priv->prpl_id) != NULL)
       {
-        g_set_error (error, TP_ERRORS, TP_ERROR_NOT_AVAILABLE,
+        g_set_error (error, TP_ERROR, TP_ERROR_NOT_AVAILABLE,
             "a connection already exists to %s on %s", priv->username,
             priv->prpl_id);
         return FALSE;
@@ -717,6 +720,8 @@ haze_connection_finalize (GObject *object)
 
     tp_contacts_mixin_finalize (object);
     tp_presence_mixin_finalize (object);
+
+    haze_connection_capabilities_finalize (object);
 
     g_strfreev (self->acceptable_avatar_mime_types);
     g_free (priv->username);

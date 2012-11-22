@@ -7,7 +7,7 @@ AC_PREREQ([2.59])
 #  set nano_version to 1
 
 m4_define([haze_major_version], [0])
-m4_define([haze_minor_version], [6])
+m4_define([haze_minor_version], [7])
 m4_define([haze_micro_version], [0])
 m4_define([haze_nano_version], [0])
 
