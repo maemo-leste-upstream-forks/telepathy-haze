@@ -1,4 +1,4 @@
-telepathy-haze (0.7.0-1) UNRELEASED; urgency=low
+telepathy-haze (0.7.0-1) experimental; urgency=low
 
   * Branch for experimental
   * New upstream release
@@ -9,7 +9,7 @@ telepathy-haze (0.7.0-1) UNRELEASED; urgency=low
   * Remove unused README.source and update-patches.mk
   * Run autoreconf during build
 
- -- Simon McVittie <smcv@debian.org>  Thu, 22 Nov 2012 16:06:11 +0000
+ -- Simon McVittie <smcv@debian.org>  Thu, 22 Nov 2012 18:25:29 +0000
 
 telepathy-haze (0.6.0-1) unstable; urgency=low
 
