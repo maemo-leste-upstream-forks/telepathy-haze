@@ -33,6 +33,8 @@ Description: Telepathy connection manager that uses libpurple
  AIM, Windows Live (MSN), Yahoo!, Gadu-Gadu, Groupwise and ICQ.
 
 Package: telepathy-haze-dbg
+Section: debug
+Priority: extra
 Architecture: any
 Depends: telepathy-haze (= ${binary:Version}),
          ${misc:Depends}
