@@ -7,6 +7,12 @@
 /* Enable audio/video calls */
 #undef ENABLE_MEDIA
 
+/* Prevent post 2.30 APIs */
+#undef GLIB_VERSION_MAX_ALLOWED
+
+/* Ignore post 2.30 deprecations */
+#undef GLIB_VERSION_MIN_REQUIRED
+
 /* Define to 1 if you have the <dlfcn.h> header file. */
 #undef HAVE_DLFCN_H
 

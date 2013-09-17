@@ -1,3 +1,283 @@
+commit 9e4672c115e56794192ba80c8f601a21859eba63
+Author: Simon McVittie <simon.mcvittie@collabora.co.uk>
+Date:   2013-09-17 11:24:36 +0100
+
+    Clean up test files
+
+commit 0f6725aa23a46903d69821f824d315b82f956f9d
+Author: Simon McVittie <simon.mcvittie@collabora.co.uk>
+Date:   2013-09-17 11:22:51 +0100
+
+    Distribute gabbletest
+
+commit 2c023f021588b1f9c551485019961423edc15021
+Author: Simon McVittie <simon.mcvittie@collabora.co.uk>
+Date:   2013-09-17 11:22:14 +0100
+
+    Distribute with-session-bus.sh
+
+commit 0adf690eed3af2cbbe3c562579c543e6cb4dee4d
+Author: Simon McVittie <simon.mcvittie@collabora.co.uk>
+Date:   2013-09-17 11:04:53 +0100
+
+    Update telepathy.am from Gabble, omitting the gtk-doc bit
+    
+    So out-of-tree/parallel distcheck works.
+
+commit 0344973f362b45de1382f70bdabd0d3b433c718f
+Author: Simon McVittie <simon.mcvittie@collabora.co.uk>
+Date:   2013-09-17 11:02:36 +0100
+
+    0.7.1
+
+commit b09dadbdc54253cd680267aaac6b28f3bb689290
+Author: Simon McVittie <simon.mcvittie@collabora.co.uk>
+Date:   2013-09-17 10:50:03 +0100
+
+    Disable warnings about deprecated functions for stable branch
+    
+    Since this is (about to be) a stable branch, we're unlikely to fix
+    uses of deprecated functions, so we shouldn't warn about them. To be
+    reverted in the 0.9 branch.
+
+commit 274396a192e911cb9c9ddb1de1e5fa67f3939714
+Author: Guillaume Desmottes <guillaume.desmottes@collabora.co.uk>
+Date:   2013-09-12 14:34:57 +0200
+
+    .gitignore: update with new test files
+    
+    https://bugs.freedesktop.org/show_bug.cgi?id=69269
+
+commit 8f7868f7911614023b6ca2af36e811d9d15b3b6f
+Author: Guillaume Desmottes <guillaume.desmottes@collabora.co.uk>
+Date:   2013-09-12 14:19:50 +0200
+
+    Run regression tests under the run-test.sh "driver"
+    
+    https://bugs.freedesktop.org/show_bug.cgi?id=69269
+
+commit 52e3df63bb1f985637a53e73b892f55387043cea
+Author: Guillaume Desmottes <guillaume.desmottes@collabora.co.uk>
+Date:   2013-09-12 14:11:17 +0200
+
+    move tests tools to tests/twisted/tools
+    
+    Other CMs store these files there.
+    
+    https://bugs.freedesktop.org/show_bug.cgi?id=69269
+
+commit 8fbc5939d539754f2a6c4d55e847ccca07119728
+Author: Guillaume Desmottes <guillaume.desmottes@collabora.co.uk>
+Date:   2013-09-12 13:33:00 +0200
+
+    Import run-test.sh.in from Gabble master
+    
+    https://bugs.freedesktop.org/show_bug.cgi?id=69269
+
+commit 279e80ef46d95ae7dec00e375b5001abfe7b5d7a
+Author: Simon McVittie <simon.mcvittie@collabora.co.uk>
+Date:   2013-06-27 12:10:11 +0100
+
+    Adjust for Sametime accounts getting a "usersplit" in libpurple 2.10.1
+    
+    Previously, Sametime accounts had separate 'account' and 'server'
+    parameters. Upgrading to libpurple 2.10.1 caused them to have
+    a single 'account' parameter with syntax like "username:server",
+    flagged as being split at ":" - to keep existing accounts working,
+    we want to separate them again, like we do for IRC.
+    
+    Bug: https://bugs.freedesktop.org/show_bug.cgi?id=44631
+    Tested-by: Simone Caronni
+    Signed-off-by: Simon McVittie <simon.mcvittie@collabora.co.uk>
+
+commit 2a538fe27487fc5aa6c46414d15c205042344204
+Author: Simon McVittie <simon.mcvittie@collabora.co.uk>
+Date:   2013-06-04 12:11:00 +0100
+
+    Avoid recent libpurple doing "clever" proxy discovery, etc.
+    
+    The regression tests are not a full desktop session, and don't have
+    GSettings or other GNOME features. They also don't have KDE features,
+    which libpurple also checks.
+    
+    Bug: https://bugs.freedesktop.org/show_bug.cgi?id=65290
+    Reviewed-by: Xavier Claessens <xavier.claessens@collabora.co.uk>
+
+commit cbe583bce4ceec03caf9b2d67af0ea6ca3ea8818
+Author: Simon McVittie <simon.mcvittie@collabora.co.uk>
+Date:   2013-06-04 12:17:52 +0100
+
+    Initialize libdbus for thread-safety
+    
+    Bug: https://bugs.freedesktop.org/show_bug.cgi?id=65296
+
+commit c8a6b9edd819c48148e70a52cb4b6fdd5de96d75
+Author: Simon McVittie <simon.mcvittie@collabora.co.uk>
+Date:   2013-04-04 16:47:20 +0100
+
+    Sync with-session-bus.sh from telepathy-glib master
+    
+    Bug: https://bugs.freedesktop.org/show_bug.cgi?id=63119
+
+commit 54ff4b44fb9cad660df9732cabff04ecc34729ca
+Author: Xavier Claessens <xavier.claessens@collabora.co.uk>
+Date:   2013-05-27 14:50:11 +0200
+
+    Revert "Disable warnings about deprecated functions for stable branch"
+    
+    This reverts commit ae048ead88ae7e65372093d92af0cbedbf7d5c17.
+
+commit 76ce89dd88bddc39d90846fd9ce5d52c4fe99e18
+Author: Xavier Claessens <xavier.claessens@collabora.co.uk>
+Date:   2013-05-27 14:50:01 +0200
+
+    Revert "Revert "Stop using deprecated tp-glib symbols""
+    
+    This reverts commit 92d963e9fbfcfd0c3087c7ce2b2269a73ebe258d.
+
+commit 83723921f8d9d59164f8046e30da10f2706b3417
+Merge: e91b353 ae048ea
+Author: Xavier Claessens <xavier.claessens@collabora.co.uk>
+Date:   2013-05-27 14:49:31 +0200
+
+    Merge branch 'telepathy-haze-0.6'
+    
+    Conflicts:
+    	src/im-channel.c
+
+commit ae048ead88ae7e65372093d92af0cbedbf7d5c17
+Author: Xavier Claessens <xavier.claessens@collabora.co.uk>
+Date:   2013-05-27 14:36:10 +0200
+
+    Disable warnings about deprecated functions for stable branch
+    
+    Since this is a stable branch, we're unlikely to fix uses of deprecated
+    functions, so we shouldn't warn about them. To be reverted in the 0.7 branch.
+
+commit 92d963e9fbfcfd0c3087c7ce2b2269a73ebe258d
+Author: Xavier Claessens <xavier.claessens@collabora.co.uk>
+Date:   2013-05-27 14:35:37 +0200
+
+    Revert "Stop using deprecated tp-glib symbols"
+    
+    This reverts commit 1e42a9cd5fe1dce527c1074402763cd3d203cd4c.
+
+commit e91b3531384e1e75abdd039bc61a89c186f2b373
+Merge: ab6c82b 1e42a9c
+Author: Xavier Claessens <xavier.claessens@collabora.co.uk>
+Date:   2013-05-27 13:58:35 +0200
+
+    Merge branch 'telepathy-haze-0.6'
+    
+    Conflicts:
+    	src/contact-list.c
+    	src/im-channel.c
+
+commit 1e42a9cd5fe1dce527c1074402763cd3d203cd4c
+Author: Xavier Claessens <xavier.claessens@collabora.co.uk>
+Date:   2013-05-27 13:29:27 +0200
+
+    Stop using deprecated tp-glib symbols
+    
+    tp-haze already depends on tp-glib 0.15.1 which is enough
+    for all replacements AFAIK. In particular tp_handle_ref/unref
+    are no-op since 0.13.8.
+
+commit 69f00e7be3a9a4984570d1e7fe4eafb4ba61f077
+Author: Xavier Claessens <xavier.claessens@collabora.co.uk>
+Date:   2013-05-27 13:17:16 +0200
+
+    Work around GValueArray deprecation
+    
+    We define GLIB_VERSION_MIN_REQUIRED to GLIB_VERSION_2_30 to ignore
+    post 2.30 deprecations. Note that this does not bump required glib
+    version, it is still 2.22. With glib < 2.32 it won't have any effect.
+
+commit ab6c82bbc49a4faac136fe6b2422bb9508b1a960
+Author: Will Thompson <will.thompson@collabora.co.uk>
+Date:   2013-04-12 11:20:42 +0100
+
+    Test closing the request_password channel
+
+commit 4541819cc4133d1dfe6d3766c6cf8f0204a4c65f
+Author: Will Thompson <will.thompson@collabora.co.uk>
+Date:   2013-04-12 11:16:42 +0100
+
+    Don't call purple_account_disconnect() if pw request fails
+    
+    prpl-jabber, prpl-silc, prpl-sipe all deal with taking the account
+    offline one way or another in their cancel_cb, and calling
+    purple_account_disconnect() without checking
+    purple_account_is_disconnected() causes a critical warning if the
+    account is already offline.
+
+commit 71f9f850be1eefc949c400a3081a7edaa336aec2
+Author: Will Thompson <will.thompson@collabora.co.uk>
+Date:   2013-04-12 10:59:09 +0100
+
+    Add sasl/telepathy-password.py from Gabble
+    
+    This exercises the happy path of Stefan's patches to support
+    purple_account_request_password().
+
+commit 9ee8b96ad91af52936f5bee5b9a472de645c2363
+Author: Will Thompson <will.thompson@collabora.co.uk>
+Date:   2013-04-11 19:30:32 +0100
+
+    Refresh and uncopypasta gabbletest
+    
+    hazetest now overrides what it needs to, and reuses the rest of
+    gabbletest verbatim in a separate module. I had to add a couple of hooks
+    which I'll commit to Gabble.
+
+commit 4068d8504b2155168b82144a4d45b138e0579ef2
+Author: Stefan Becker <chemobejk@gmail.com>
+Date:   2013-04-11 15:45:34 +0300
+
+    request: fix more resource leaks
+    
+    Triggered by Will's review comments.
+    
+    - check callback pointers to be non-NULL before calling them
+    - call cancel_cb also in destroy idle callback
+    - reset connection's password request field on closing
+    - coding style cleanup
+    
+    https://bugs.freedesktop.org/show_bug.cgi?id=63326
+
+commit eef971c3aeb61b9b60013f3b728f62e7ac5580bf
+Author: Stefan Becker <chemobejk@gmail.com>
+Date:   2013-04-10 16:13:04 +0300
+
+    request: fix resource leakage
+    
+    It is the responsibility of the UI code to free the "fields" parameter
+    after haze_request_fields() has been called. This has to be done with
+    purple_request_close() and handled in the close_request() UI operation.
+    
+    https://bugs.freedesktop.org/show_bug.cgi?id=63326
+
+commit 66b7fff2f65b65a5d298bf868bb8e21a32492a58
+Author: Stefan Becker <chemobejk@gmail.com>
+Date:   2013-04-09 19:30:34 +0300
+
+    request: handle purple_account_request_password()
+    
+    This is needed for libpurple plugins with optional password, e.g. SIPE
+    since 1.14.1. That libpurple API call boils down to a
+    purple_request_fields() call.
+    
+    The flagging for --enable-leaky-request-stubs was refactored so that
+    this new code is always compiled in.
+    
+    https://bugs.freedesktop.org/show_bug.cgi?id=63326
+
+commit 1fe98b1bede98c4935f76a514a3943546a869c02
+Author: Will Thompson <will.thompson@collabora.co.uk>
+Date:   2012-11-21 17:14:23 +0000
+
+    bump nano-version
+
 commit b232ad1cc35037f6ec18b59c194f8c5444f3fad1
 Author: Will Thompson <will.thompson@collabora.co.uk>
 Date:   2012-11-21 17:11:25 +0000

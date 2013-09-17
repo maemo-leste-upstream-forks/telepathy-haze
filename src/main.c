@@ -28,6 +28,7 @@
 #include <errno.h>
 #include <signal.h>
 
+#include <dbus/dbus.h>
 #include <glib.h>
 
 #include <libpurple/account.h>
@@ -141,9 +142,7 @@ haze_ui_init (void)
     purple_accounts_set_ui_ops (haze_get_account_ui_ops ());
     purple_conversations_set_ui_ops (haze_get_conv_ui_ops ());
     purple_connections_set_ui_ops (haze_get_connection_ui_ops ());
-#ifdef ENABLE_LEAKY_REQUEST_STUBS
     purple_request_set_ui_ops (haze_request_get_ui_ops ());
-#endif
     purple_notify_set_ui_ops (haze_notify_get_ui_ops ());
     purple_privacy_set_ui_ops (haze_get_privacy_ui_ops ());
 }
@@ -253,6 +252,10 @@ main(int argc,
      char **argv)
 {
     int ret = 0;
+
+    if (!dbus_threads_init_default ())
+        g_error ("Unable to initialize libdbus for thread-safety "
+            "(out of memory?)");
 
     g_set_prgname(UI_ID);
 
