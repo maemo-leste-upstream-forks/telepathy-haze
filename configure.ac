@@ -8,7 +8,7 @@ AC_PREREQ([2.59])
 
 m4_define([haze_major_version], [0])
 m4_define([haze_minor_version], [7])
-m4_define([haze_micro_version], [0])
+m4_define([haze_micro_version], [1])
 m4_define([haze_nano_version], [0])
 
 m4_define([haze_base_version],
@@ -32,6 +32,7 @@ AC_CONFIG_FILES([Makefile
 		 m4/Makefile
 		 tests/Makefile
 		 tests/twisted/Makefile
+		 tests/twisted/tools/Makefile
 		 tools/Makefile
 		 extensions/Makefile
 		 ])
@@ -61,7 +62,8 @@ TP_COMPILER_WARNINGS([ERROR_CFLAGS], [test x$release = xno],
    format-security \
    init-self],
   [missing-field-initializers \
-   unused-parameter])
+   unused-parameter \
+   deprecated-declarations])
 AC_SUBST(ERROR_CFLAGS)
 
 AC_CHECK_HEADERS_ONCE([libintl.h])
@@ -75,6 +77,10 @@ PKG_CHECK_MODULES(PURPLE,[purple >= 2.7])
 PKG_CHECK_MODULES(TP_GLIB,[telepathy-glib >= 0.15.1])
 PKG_CHECK_MODULES(GLIB,[glib-2.0 >= 2.22, gobject-2.0, gio-2.0])
 PKG_CHECK_MODULES(DBUS_GLIB,[dbus-glib-1 >= 0.73])
+
+dnl MIN_REQUIRED must stay to 2.30 because of GValueArray
+AC_DEFINE([GLIB_VERSION_MIN_REQUIRED], [GLIB_VERSION_2_30], [Ignore post 2.30 deprecations])
+AC_DEFINE([GLIB_VERSION_MAX_ALLOWED], [GLIB_VERSION_2_30], [Prevent post 2.30 APIs])
 
 GLIB_GENMARSHAL=`$PKG_CONFIG --variable=glib_genmarshal glib-2.0`
 AC_SUBST(GLIB_GENMARSHAL)

@@ -42,6 +42,7 @@
 #include "connection-avatars.h"
 #include "connection-mail.h"
 #include "extensions/extensions.h"
+#include "request.h"
 
 #include "connection-capabilities.h"
 
@@ -137,6 +138,9 @@ struct _HazeConnectionPrivate
 
     gchar *prpl_id;
     PurplePluginProtocolInfo *prpl_info;
+
+    /* Set if purple_account_request_password() was called */
+    gpointer password_request;
 
     /* Set if purple_account_disconnect has been called or is scheduled to be
      * called, so should not be called again.
@@ -446,15 +450,23 @@ _haze_connection_password_manager_prompt_cb (GObject *source,
     {
       DEBUG ("Simple password manager failed: %s", error->message);
 
-      if (base_conn->status != TP_CONNECTION_STATUS_DISCONNECTED)
+      if (priv->password_request)
+        {
+          haze_request_password_cb (priv->password_request, NULL);
+          /* no need to call purple_account_disconnect(): the prpl will take
+           * the account offline. If we're lucky it'll use an
+           * AUTHENTICATION_FAILED-type message.
+           */
+        }
+      else if (base_conn->status != TP_CONNECTION_STATUS_DISCONNECTED)
         {
           tp_base_connection_disconnect_with_dbus_error (base_conn,
               tp_error_get_dbus_name (error->code), NULL,
               TP_CONNECTION_STATUS_REASON_AUTHENTICATION_FAILED);
+          /* no need to call purple_account_disconnect because _connect
+           * was never called ...
+           */
         }
-
-      /* no need to call purple_account_disconnect because _connect
-       * was never called */
 
       g_error_free (error);
       return;
@@ -463,11 +475,18 @@ _haze_connection_password_manager_prompt_cb (GObject *source,
   g_free (priv->password);
   priv->password = g_strdup (password->str);
 
-  purple_account_set_password (self->account, priv->password);
+  if (priv->password_request)
+    {
+      haze_request_password_cb (priv->password_request, priv->password);
+    }
+  else
+    {
+      purple_account_set_password (self->account, priv->password);
 
-  purple_account_set_enabled(self->account, UI_ID, TRUE);
-  purple_account_connect (self->account);
-  priv->connect_called = TRUE;
+      purple_account_set_enabled(self->account, UI_ID, TRUE);
+      purple_account_connect (self->account);
+      priv->connect_called = TRUE;
+    }
 }
 
 static gboolean
@@ -514,6 +533,30 @@ _haze_connection_start_connecting (TpBaseConnection *base,
       }
 
     return TRUE;
+}
+
+void
+haze_connection_request_password (PurpleAccount *account,
+                                  void *user_data)
+{
+    HazeConnection *self = ACCOUNT_GET_HAZE_CONNECTION (account);
+    HazeConnectionPrivate *priv = self->priv;
+
+    priv->password_request = user_data;
+
+    /* pop up auth channel */
+    tp_simple_password_manager_prompt_async (self->password_manager,
+                                             _haze_connection_password_manager_prompt_cb,
+                                             self);
+}
+
+void
+haze_connection_cancel_password_request (PurpleAccount *account)
+{
+    HazeConnection *self = ACCOUNT_GET_HAZE_CONNECTION (account);
+    HazeConnectionPrivate *priv = self->priv;
+
+    priv->password_request = NULL;
 }
 
 static void
