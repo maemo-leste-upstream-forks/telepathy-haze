@@ -1,3 +1,9 @@
+telepathy-haze (0.7.1-1) unstable; urgency=low
+
+  * New upstream release (release candidate for 0.8)
+
+ -- Simon McVittie <smcv@debian.org>  Tue, 17 Sep 2013 11:36:00 +0100
+
 telepathy-haze (0.7.0-1) experimental; urgency=low
 
   * Branch for experimental
