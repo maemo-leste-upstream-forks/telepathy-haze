@@ -1,3 +1,72 @@
+commit 00be1032a4dbb7340d0213959954cf93d236accb
+Author: Simon McVittie <simon.mcvittie@collabora.co.uk>
+Date:   2013-10-02 17:58:00 +0100
+
+    0.8.0
+
+commit 5ebdcd4ced55abc121cc0b796a01a943e3bf040f
+Author: Simon McVittie <simon.mcvittie@collabora.co.uk>
+Date:   2013-09-24 12:07:29 +0100
+
+    NEWS
+
+commit 755b880c45e75c072eaaa93007495b751515677b
+Author: Simon McVittie <simon.mcvittie@collabora.co.uk>
+Date:   2013-09-23 17:02:43 +0100
+
+    HazeIMChannel: chain up properly in dispose
+    
+    Bug: https://bugs.freedesktop.org/show_bug.cgi?id=31723
+    Reviewed-by: Guillaume Desmottes <guillaume.desmottes@collabora.co.uk>
+
+commit 8e34a2952f3c45669580f3ab410a4283dbad1e93
+Author: Simon McVittie <simon.mcvittie@collabora.co.uk>
+Date:   2013-09-23 14:53:40 +0100
+
+    haze_contact_list_set_contact_groups_async: fix sense of test
+    
+    We want to remove the buddy from every group *not* listed in the
+    argument.
+    
+    Bug: https://bugs.freedesktop.org/show_bug.cgi?id=49389
+    Reviewed-by: Guillaume Desmottes <guillaume.desmottes@collabora.co.uk>
+
+commit 8442417b414d4144392f1d11cd2a2454bedd1826
+Author: Simon McVittie <simon.mcvittie@collabora.co.uk>
+Date:   2013-09-17 16:19:23 +0100
+
+    Test unknown presences
+    
+    Bug: https://bugs.freedesktop.org/show_bug.cgi?id=69474
+    Reviewed-by: Xavier Claessens <xavier.claessens@collabora.co.uk>
+
+commit d83535cc0a9f2d0b75ecba17a97db51cb49affb0
+Author: Simon McVittie <simon.mcvittie@collabora.co.uk>
+Date:   2013-09-17 16:13:25 +0100
+
+    Return UNKNOWN status for non-buddies, rather than raising an error
+    
+    This is consistent with Gabble.
+    
+    Also, don't crash if libpurple gives us a PurpleStatusPrimitive
+    outside the range we understand; guess wildly that it's probably
+    AVAILABLE.
+    
+    Bug: https://bugs.freedesktop.org/show_bug.cgi?id=69474
+    Reviewed-by: Xavier Claessens <xavier.claessens@collabora.co.uk>
+
+commit 72e4db4e9c9130a442fdbd24b264e59265877c6d
+Author: Simon McVittie <simon.mcvittie@collabora.co.uk>
+Date:   2013-09-17 13:40:53 +0100
+
+    I keep forgetting the release name :-(
+
+commit 00ec6b357d5005a71df553e91c90222d7f711db9
+Author: Simon McVittie <simon.mcvittie@collabora.co.uk>
+Date:   2013-09-17 13:18:55 +0100
+
+    0.7.1.1
+
 commit 9e4672c115e56794192ba80c8f601a21859eba63
 Author: Simon McVittie <simon.mcvittie@collabora.co.uk>
 Date:   2013-09-17 11:24:36 +0100

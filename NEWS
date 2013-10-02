@@ -1,5 +1,24 @@
+telepathy-haze 0.8.0 (2013-10-02)
+=================================
+
+The “batch processing” release. This is a new stable branch,
+recommended GNOME 3.10-based distributions.
+
+Fixes:
+
+• Report contacts with unknown presence as 'unknown' rather than raising
+  an error, and don't crash if libpurple reports a "primitive status"
+  that we don't understand (fd.o #69474, Simon)
+
+• Fix a memory leak when IM channels are closed (fd.o #31723, Simon)
+
+• Fix ContactGroups.SetContactGroups() implementation so it removes
+  the contact from groups if desired (fd.o #49389, Simon)
+
 telepathy-haze 0.7.1 (2013-09-17)
 =================================
+
+The “buzzes like a fridge” release.
 
 This is a release candidate for telepathy-haze 0.8, recommended for
 use with GNOME 3.10.
