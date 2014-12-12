@@ -1,3 +1,9 @@
+telepathy-haze (0.8.0-3) UNRELEASED; urgency=medium
+
+  * Remove myself from Uploaders
+
+ -- Simon McVittie <smcv@debian.org>  Fri, 12 Dec 2014 13:40:58 +0000
+
 telepathy-haze (0.8.0-2) unstable; urgency=medium
 
   * debian/watch: only watch for 0.x stable versions
