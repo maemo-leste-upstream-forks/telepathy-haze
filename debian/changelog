@@ -1,4 +1,7 @@
-telepathy-haze (0.8.0-3) UNRELEASED; urgency=medium
+telepathy-haze (0.8.0-2.1) unstable; urgency=medium
+
+  * Non-maintainer upload, incorporating pending changes from
+    pkg-telepathy git.
 
   [ Simon McVittie ]
   * Remove myself from Uploaders
@@ -8,7 +11,7 @@ telepathy-haze (0.8.0-3) UNRELEASED; urgency=medium
   [ Jonny Lamb ]
   * Remove myself from Uploaders.
 
- -- Simon McVittie <smcv@debian.org>  Fri, 12 Dec 2014 13:40:58 +0000
+ -- Simon McVittie <smcv@debian.org>  Tue, 13 Dec 2016 21:22:54 +0000
 
 telepathy-haze (0.8.0-2) unstable; urgency=medium
 
