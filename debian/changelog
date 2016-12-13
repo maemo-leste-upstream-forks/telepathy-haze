@@ -2,6 +2,8 @@ telepathy-haze (0.8.0-3) UNRELEASED; urgency=medium
 
   [ Simon McVittie ]
   * Remove myself from Uploaders
+  * d/p/purple-2.0.12.patch: add patch by Koop Mast from FreeBSD
+    to fix build with recent libpurple (Closes: #824739)
 
   [ Jonny Lamb ]
   * Remove myself from Uploaders.
