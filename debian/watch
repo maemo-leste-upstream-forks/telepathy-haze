@@ -1,2 +1,2 @@
-version=3
-http://telepathy.freedesktop.org/releases/telepathy-haze/telepathy\-haze\-(0\.[0-9]*[24680]\..*)\.tar\.(?:gz|bz2|xz)
+version=4
+https://telepathy.freedesktop.org/releases/telepathy-haze/telepathy\-haze\-(0\.[0-9]*[24680]\..*)\.tar\.(?:gz|bz2|xz)

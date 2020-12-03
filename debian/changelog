@@ -5,8 +5,9 @@ telepathy-haze (0.8.0-3) UNRELEASED; urgency=medium
   * debian/control: Bump Standards-Version 4.5.1 (no further changes)
   * Drop telepathy-haze-dbg and rely on automatically built -dbgsym one
   * Bump debhelper compatibility version to 13
+  * debian/watch: Use HTTPS and file format version 4
 
- -- Laurent Bigonville <bigon@debian.org>  Thu, 03 Dec 2020 02:10:00 +0100
+ -- Laurent Bigonville <bigon@debian.org>  Thu, 03 Dec 2020 02:12:13 +0100
 
 telepathy-haze (0.8.0-2.1) unstable; urgency=medium
 
