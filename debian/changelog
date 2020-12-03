@@ -1,3 +1,10 @@
+telepathy-haze (0.8.0-3) UNRELEASED; urgency=medium
+
+  * Explicitly use python2 for build. The unversioned python executable is
+    going away for Debian 11. Adjust the shebang accordingly. (Closes: #967216)
+
+ -- Laurent Bigonville <bigon@debian.org>  Thu, 03 Dec 2020 01:57:35 +0100
+
 telepathy-haze (0.8.0-2.1) unstable; urgency=medium
 
   * Non-maintainer upload, incorporating pending changes from
