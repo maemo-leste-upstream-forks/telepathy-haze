@@ -3,8 +3,9 @@ telepathy-haze (0.8.0-3) UNRELEASED; urgency=medium
   * Explicitly use python2 for build. The unversioned python executable is
     going away for Debian 11. Adjust the shebang accordingly. (Closes: #967216)
   * debian/control: Bump Standards-Version 4.5.1 (no further changes)
+  * Drop telepathy-haze-dbg and rely on automatically built -dbgsym one
 
- -- Laurent Bigonville <bigon@debian.org>  Thu, 03 Dec 2020 02:00:40 +0100
+ -- Laurent Bigonville <bigon@debian.org>  Thu, 03 Dec 2020 02:03:04 +0100
 
 telepathy-haze (0.8.0-2.1) unstable; urgency=medium
 

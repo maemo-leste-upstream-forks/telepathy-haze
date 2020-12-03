@@ -22,4 +22,4 @@ override_dh_install:
 	dh_install --list-missing
 
 override_dh_strip:
-	dh_strip --dbg-package=telepathy-haze-dbg
+	dh_strip --dbgsym-migration='telepathy-haze-dbg (<< 0.8.0-3~)'
