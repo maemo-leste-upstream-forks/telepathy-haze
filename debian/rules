@@ -3,7 +3,7 @@
 include /usr/share/dpkg/default.mk
 
 %:
-	dh $@ --with autoreconf --parallel
+	dh $@
 
 # Now that we use debhelper 9, dh_auto_configure defaults to
 # $libexecdir=$libdir, which might be better than this, but doesn't match
@@ -18,8 +18,8 @@ override_dh_auto_configure:
 override_dh_auto_test:
 	:
 
-override_dh_install:
-	dh_install --list-missing
+override_dh_missing:
+	dh_missing --list-missing
 
 override_dh_strip:
 	dh_strip --dbgsym-migration='telepathy-haze-dbg (<< 0.8.0-3~)'
