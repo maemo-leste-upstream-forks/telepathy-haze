@@ -1,4 +1,4 @@
-telepathy-haze (0.8.0-3) UNRELEASED; urgency=medium
+telepathy-haze (0.8.0-3) unstable; urgency=medium
 
   * Explicitly use python2 for build. The unversioned python executable is
     going away for Debian 11. Adjust the shebang accordingly. (Closes: #967216)
@@ -8,7 +8,7 @@ telepathy-haze (0.8.0-3) UNRELEASED; urgency=medium
   * debian/watch: Use HTTPS and file format version 4
   * debian/control: Update Vcs-* now that the repository has moved to salsa
 
- -- Laurent Bigonville <bigon@debian.org>  Thu, 03 Dec 2020 02:14:02 +0100
+ -- Laurent Bigonville <bigon@debian.org>  Thu, 03 Dec 2020 02:26:01 +0100
 
 telepathy-haze (0.8.0-2.1) unstable; urgency=medium
 
