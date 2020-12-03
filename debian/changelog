@@ -6,8 +6,9 @@ telepathy-haze (0.8.0-3) UNRELEASED; urgency=medium
   * Drop telepathy-haze-dbg and rely on automatically built -dbgsym one
   * Bump debhelper compatibility version to 13
   * debian/watch: Use HTTPS and file format version 4
+  * debian/control: Update Vcs-* now that the repository has moved to salsa
 
- -- Laurent Bigonville <bigon@debian.org>  Thu, 03 Dec 2020 02:12:13 +0100
+ -- Laurent Bigonville <bigon@debian.org>  Thu, 03 Dec 2020 02:14:02 +0100
 
 telepathy-haze (0.8.0-2.1) unstable; urgency=medium
 
