@@ -557,21 +557,15 @@ static const gchar * const supported_content_types[] = {
     NULL
 };
 
-static GObject *
-haze_im_channel_constructor (GType type, guint n_props,
-                             GObjectConstructParam *props)
+static void
+haze_im_channel_constructed (GObject *obj)
 {
-    GObject *obj;
-    HazeIMChannel *chan;
-    HazeIMChannelPrivate *priv;
-    TpBaseConnection *conn;
+    HazeIMChannel *chan = HAZE_IM_CHANNEL (obj);
+    HazeIMChannelPrivate *priv = chan->priv;
+    TpBaseConnection *conn = (TpBaseConnection *) (priv->conn);
     TpDBusDaemon *bus;
 
-    obj = G_OBJECT_CLASS (haze_im_channel_parent_class)->
-        constructor (type, n_props, props);
-    chan = HAZE_IM_CHANNEL (obj);
-    priv = chan->priv;
-    conn = (TpBaseConnection *) (priv->conn);
+    G_OBJECT_CLASS (haze_im_channel_parent_class)->constructed (obj);
 
     g_assert (priv->initiator != 0);
 
@@ -585,8 +579,6 @@ haze_im_channel_constructor (GType type, guint n_props,
 
     priv->closed = FALSE;
     priv->dispose_has_run = FALSE;
-
-    return obj;
 }
 
 static void
@@ -640,12 +632,11 @@ haze_im_channel_class_init (HazeIMChannelClass *klass)
         { NULL }
     };
 
-
     g_type_class_add_private (klass, sizeof (HazeIMChannelPrivate));
 
     object_class->get_property = haze_im_channel_get_property;
     object_class->set_property = haze_im_channel_set_property;
-    object_class->constructor = haze_im_channel_constructor;
+    object_class->constructed = haze_im_channel_constructed;
     object_class->dispose = haze_im_channel_dispose;
 
     g_object_class_override_property (object_class, PROP_OBJECT_PATH,
