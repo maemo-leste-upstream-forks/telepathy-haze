@@ -388,7 +388,7 @@ haze_im_channel_send (GObject *obj,
       break;
     case TP_CHANNEL_TEXT_MESSAGE_TYPE_AUTO_REPLY:
       flags |= PURPLE_MESSAGE_AUTO_RESP;
-      /* deliberate fall-through: */
+      /* fall-through */
     case TP_CHANNEL_TEXT_MESSAGE_TYPE_NORMAL:
       text = g_strdup (text);
       break;
