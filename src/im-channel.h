@@ -67,19 +67,6 @@ GType haze_im_channel_get_type (void);
   (G_TYPE_INSTANCE_GET_CLASS ((obj), HAZE_TYPE_IM_CHANNEL, \
                               HazeIMChannelClass))
 
-typedef struct _HazeConversationUiData HazeConversationUiData;
-
-struct _HazeConversationUiData
-{
-    TpHandle contact_handle;
-
-    PurpleTypingState active_state;
-    guint resend_typing_timeout_id;
-};
-
-#define PURPLE_CONV_GET_HAZE_UI_DATA(conv) \
-    ((HazeConversationUiData *) conv->ui_data)
-
 void haze_im_channel_start (HazeIMChannel *self);
 
 void haze_im_channel_receive (HazeIMChannel *self, const char *xhtml_message,

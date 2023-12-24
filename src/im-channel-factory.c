@@ -34,6 +34,7 @@
 #include "debug.h"
 #include "im-channel.h"
 #include "connection.h"
+#include "conversation-ui.h"
 
 struct _HazeImChannelFactoryPrivate {
     HazeConnection *conn;
@@ -43,6 +44,13 @@ struct _HazeImChannelFactoryPrivate {
 };
 
 static void channel_manager_iface_init (gpointer, gpointer);
+static void haze_im_create_conversation (PurpleConversation *conv);
+static void haze_im_destroy_conversation (PurpleConversation *conv);
+static void haze_im_write_im (PurpleConversation *conv, const char *who,
+    const char *xhtml_message, PurpleMessageFlags flags, time_t mtime);
+static void haze_im_write_conv (PurpleConversation *conv, const char *name,
+    const char *alias, const char *message, PurpleMessageFlags flags,
+    time_t mtime);
 
 G_DEFINE_TYPE_WITH_CODE(HazeImChannelFactory,
     haze_im_channel_factory,
@@ -207,6 +215,7 @@ haze_im_channel_factory_class_init (HazeImChannelFactoryClass *klass)
     GObjectClass *object_class = G_OBJECT_CLASS (klass);
     GParamSpec *param_spec;
     void *conv_handle = purple_conversations_get_handle();
+    PurpleConversationUiOps *ui_ops = haze_get_conversation_ui_ops();
 
     object_class->constructed = haze_im_channel_factory_constructed;
     object_class->dispose = haze_im_channel_factory_dispose;
@@ -228,6 +237,12 @@ haze_im_channel_factory_class_init (HazeImChannelFactoryClass *klass)
 
     purple_signal_connect (conv_handle, "conversation-updated", klass,
         (PurpleCallback) conversation_updated_cb, NULL);
+    haze_set_conversation_ui_im_create_conversation(
+        haze_im_create_conversation);
+    haze_set_conversation_ui_im_destroy_conversation(
+        haze_im_destroy_conversation);
+    haze_set_conversation_ui_im_write_conv(haze_im_write_conv);
+    ui_ops->write_im = haze_im_write_im;
 }
 
 static void
@@ -387,11 +402,11 @@ haze_im_channel_factory_foreach (TpChannelManager *iface,
 }
 
 static void
-haze_write_im (PurpleConversation *conv,
-               const char *who,
-               const char *xhtml_message,
-               PurpleMessageFlags flags,
-               time_t mtime)
+haze_im_write_im (PurpleConversation *conv,
+                  const char *who,
+                  const char *xhtml_message,
+                  PurpleMessageFlags flags,
+                  time_t mtime)
 {
     PurpleAccount *account = purple_conversation_get_account (conv);
     HazeImChannelFactory *im_factory =
@@ -404,27 +419,18 @@ haze_write_im (PurpleConversation *conv,
 }
 
 static void
-haze_write_conv (PurpleConversation *conv,
-                 const char *name,
-                 const char *alias,
-                 const char *message,
-                 PurpleMessageFlags flags,
-                 time_t mtime)
+haze_im_write_conv (PurpleConversation *conv,
+                    const char *name,
+                    const char *alias,
+                    const char *message,
+                    PurpleMessageFlags flags,
+                    time_t mtime)
 {
-    PurpleConversationType type = purple_conversation_get_type (conv);
-    switch (type)
-    {
-        case PURPLE_CONV_TYPE_IM:
-            haze_write_im (conv, name, message, flags, mtime);
-            break;
-        default:
-            DEBUG ("ignoring message to conv type %u (flags=%u; message=%s)",
-                type, flags, message);
-    }
+    haze_im_write_im (conv, name, message, flags, mtime);
 }
 
 static void
-haze_create_conversation (PurpleConversation *conv)
+haze_im_create_conversation (PurpleConversation *conv)
 {
     PurpleAccount *account = purple_conversation_get_account (conv);
 
@@ -440,12 +446,6 @@ haze_create_conversation (PurpleConversation *conv)
 
     DEBUG ("(PurpleConversation *)%p created", conv);
 
-    if (conv->type != PURPLE_CONV_TYPE_IM)
-    {
-        DEBUG ("not an IM conversation; ignoring");
-        return;
-    }
-
     g_assert (who);
 
     conv->ui_data = ui_data = g_slice_new0 (HazeConversationUiData);
@@ -455,16 +455,11 @@ haze_create_conversation (PurpleConversation *conv)
 }
 
 static void
-haze_destroy_conversation (PurpleConversation *conv)
+haze_im_destroy_conversation (PurpleConversation *conv)
 {
     HazeConversationUiData *ui_data;
 
     DEBUG ("(PurpleConversation *)%p destroyed", conv);
-    if (conv->type != PURPLE_CONV_TYPE_IM)
-    {
-        DEBUG ("not an IM conversation; ignoring");
-        return;
-    }
 
     ui_data = PURPLE_CONV_GET_HAZE_UI_DATA (conv);
 
@@ -473,41 +468,6 @@ haze_destroy_conversation (PurpleConversation *conv)
 
     g_slice_free (HazeConversationUiData, ui_data);
     conv->ui_data = NULL;
-}
-
-static PurpleConversationUiOps
-conversation_ui_ops =
-{
-    haze_create_conversation,  /* create_conversation */
-    haze_destroy_conversation, /* destroy_conversation */
-    NULL,                      /* write_chat */
-    haze_write_im,             /* write_im */
-    haze_write_conv,           /* write_conv */
-    NULL,                      /* chat_add_users */
-    NULL,                      /* chat_rename_user */
-    NULL,                      /* chat_remove_users */
-    NULL,                      /* chat_update_user */
-
-    NULL,                      /* present */
-
-    NULL,                      /* has_focus */
-
-    NULL,                      /* custom_smiley_add */
-    NULL,                      /* custom_smiley_write */
-    NULL,                      /* custom_smiley_close */
-
-    NULL,                      /* send_confirm */
-
-    NULL,                      /* _purple_reserved1 */
-    NULL,                      /* _purple_reserved2 */
-    NULL,                      /* _purple_reserved3 */
-    NULL,                      /* _purple_reserved4 */
-};
-
-PurpleConversationUiOps *
-haze_get_conv_ui_ops(void)
-{
-    return &conversation_ui_ops;
 }
 
 static const gchar * const fixed_properties[] = {

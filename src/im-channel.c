@@ -28,6 +28,7 @@
 #include "im-channel.h"
 #include "connection.h"
 #include "debug.h"
+#include "conversation-ui.h"
 
 /* properties */
 enum

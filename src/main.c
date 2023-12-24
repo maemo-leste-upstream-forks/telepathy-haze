@@ -52,6 +52,7 @@
 #include "defines.h"
 #include "debug.h"
 #include "connection-manager.h"
+#include "conversation-ui.h"
 #include "notify.h"
 #include "request.h"
 #include "util.h"
@@ -140,7 +141,7 @@ static void
 haze_ui_init (void)
 {
     purple_accounts_set_ui_ops (haze_get_account_ui_ops ());
-    purple_conversations_set_ui_ops (haze_get_conv_ui_ops ());
+    purple_conversations_set_ui_ops (haze_get_conversation_ui_ops ());
     purple_connections_set_ui_ops (haze_get_connection_ui_ops ());
     purple_request_set_ui_ops (haze_request_get_ui_ops ());
     purple_notify_set_ui_ops (haze_notify_get_ui_ops ());
