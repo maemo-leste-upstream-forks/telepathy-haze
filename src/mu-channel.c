@@ -1,7 +1,7 @@
 /*
- * im-channel.c - HazeIMChannel source
- * Copyright (C) 2007 Will Thompson
- * Copyright (C) 2007-2008 Collabora Ltd.
+ * mu-channel.c - HazeMuChannel source
+ *
+ * Copyright (C) 2023 Ivaylo Dimitrov <ivo.g.dimitrov.75@gmail.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,10 +25,11 @@
 #include <telepathy-glib/interfaces.h>
 #include <telepathy-glib/svc-generic.h>
 
-#include "im-channel.h"
+#include "mu-channel.h"
 #include "connection.h"
 #include "debug.h"
 #include "conversation-ui.h"
+
 
 /* properties */
 enum
@@ -49,7 +50,7 @@ enum
   LAST_PROPERTY
 };
 
-struct _HazeIMChannelPrivate
+struct _HazeMUChannelPrivate
 {
     HazeConnection *conn;
     char *object_path;
@@ -66,10 +67,13 @@ static void channel_iface_init (gpointer, gpointer);
 static void destroyable_iface_init (gpointer g_iface, gpointer iface_data);
 static void chat_state_iface_init (gpointer g_iface, gpointer iface_data);
 
-G_DEFINE_TYPE_WITH_CODE(HazeIMChannel, haze_im_channel, G_TYPE_OBJECT,
+G_DEFINE_TYPE_WITH_CODE(HazeMUChannel, haze_mu_channel, G_TYPE_OBJECT,
     G_IMPLEMENT_INTERFACE (TP_TYPE_SVC_CHANNEL, channel_iface_init);
     G_IMPLEMENT_INTERFACE (TP_TYPE_SVC_CHANNEL_TYPE_TEXT,
         tp_message_mixin_text_iface_init);
+    G_IMPLEMENT_INTERFACE (TP_TYPE_SVC_CHANNEL_INTERFACE_GROUP,
+        tp_group_mixin_iface_init);
+    G_IMPLEMENT_INTERFACE (TP_TYPE_SVC_CHANNEL_INTERFACE_ROOM, NULL);
     G_IMPLEMENT_INTERFACE (TP_TYPE_SVC_CHANNEL_INTERFACE_MESSAGES,
         tp_message_mixin_messages_iface_init);
     G_IMPLEMENT_INTERFACE (TP_TYPE_CHANNEL_IFACE, NULL);
@@ -82,11 +86,11 @@ G_DEFINE_TYPE_WITH_CODE(HazeIMChannel, haze_im_channel, G_TYPE_OBJECT,
     G_IMPLEMENT_INTERFACE (TP_TYPE_EXPORTABLE_CHANNEL, NULL))
 
 static void
-haze_im_channel_close (TpSvcChannel *iface,
+haze_mu_channel_close (TpSvcChannel *iface,
                        DBusGMethodInvocation *context)
 {
-    HazeIMChannel *self = HAZE_IM_CHANNEL (iface);
-    HazeIMChannelPrivate *priv = self->priv;
+    HazeMUChannel *self = HAZE_MU_CHANNEL (iface);
+    HazeMUChannelPrivate *priv = self->priv;
 
     if (priv->closed)
     {
@@ -121,7 +125,7 @@ out:
 }
 
 static void
-haze_im_channel_get_channel_type (TpSvcChannel *iface,
+haze_mu_channel_get_channel_type (TpSvcChannel *iface,
                                   DBusGMethodInvocation *context)
 {
     tp_svc_channel_return_from_get_channel_type (context,
@@ -129,17 +133,17 @@ haze_im_channel_get_channel_type (TpSvcChannel *iface,
 }
 
 static void
-haze_im_channel_get_handle (TpSvcChannel *iface,
+haze_mu_channel_get_handle (TpSvcChannel *iface,
                             DBusGMethodInvocation *context)
 {
-    HazeIMChannel *self = HAZE_IM_CHANNEL (iface);
+    HazeMUChannel *self = HAZE_MU_CHANNEL (iface);
 
-    tp_svc_channel_return_from_get_handle (context, TP_HANDLE_TYPE_CONTACT,
+    tp_svc_channel_return_from_get_handle (context, TP_HANDLE_TYPE_ROOM,
         self->priv->handle);
 }
 
 static gboolean
-_chat_state_available (HazeIMChannel *chan)
+_chat_state_available (HazeMUChannel *chan)
 {
     PurplePluginProtocolInfo *prpl_info =
         PURPLE_PLUGIN_PROTOCOL_INFO (chan->priv->conn->account->gc->prpl);
@@ -148,10 +152,11 @@ _chat_state_available (HazeIMChannel *chan)
 }
 
 static const char * const*
-_haze_im_channel_interfaces (HazeIMChannel *chan)
+_haze_mu_channel_interfaces (HazeMUChannel *chan)
 {
   static const char * const interfaces[] = {
       TP_IFACE_CHANNEL_INTERFACE_CHAT_STATE,
+      TP_IFACE_CHANNEL_INTERFACE_GROUP,
       TP_IFACE_CHANNEL_INTERFACE_MESSAGES,
       TP_IFACE_CHANNEL_INTERFACE_DESTROYABLE,
       NULL
@@ -164,11 +169,11 @@ _haze_im_channel_interfaces (HazeIMChannel *chan)
 }
 
 static void
-haze_im_channel_get_interfaces (TpSvcChannel *iface,
+haze_mu_channel_get_interfaces (TpSvcChannel *iface,
                                 DBusGMethodInvocation *context)
 {
     tp_svc_channel_return_from_get_interfaces (context,
-        (const char **)_haze_im_channel_interfaces (HAZE_IM_CHANNEL (iface)));
+        (const char **)_haze_mu_channel_interfaces (HAZE_MU_CHANNEL (iface)));
 }
 
 static void
@@ -177,7 +182,7 @@ channel_iface_init (gpointer g_iface, gpointer iface_data)
     TpSvcChannelClass *klass = (TpSvcChannelClass *)g_iface;
 
 #define IMPLEMENT(x) tp_svc_channel_implement_##x (\
-    klass, haze_im_channel_##x)
+    klass, haze_mu_channel_##x)
     IMPLEMENT(close);
     IMPLEMENT(get_channel_type);
     IMPLEMENT(get_handle);
@@ -186,18 +191,18 @@ channel_iface_init (gpointer g_iface, gpointer iface_data)
 }
 
 /**
- * haze_im_channel_destroy
+ * haze_mu_channel_destroy
  *
  * Implements D-Bus method Destroy
  * on interface org.freedesktop.Telepathy.Channel.Interface.Destroyable
  */
 static void
-haze_im_channel_destroy (TpSvcChannelInterfaceDestroyable *iface,
+haze_mu_channel_destroy (TpSvcChannelInterfaceDestroyable *iface,
                          DBusGMethodInvocation *context)
 {
-    HazeIMChannel *self = HAZE_IM_CHANNEL (iface);
+    HazeMUChannel *self = HAZE_MU_CHANNEL (iface);
 
-    g_assert (HAZE_IS_IM_CHANNEL (self));
+    g_assert (HAZE_IS_MU_CHANNEL (self));
 
     DEBUG ("called on %p", self);
 
@@ -206,7 +211,7 @@ haze_im_channel_destroy (TpSvcChannelInterfaceDestroyable *iface,
 
     /* Close() and Destroy() have the same signature, so we can safely
      * chain to the other function now */
-    haze_im_channel_close ((TpSvcChannel *) self, context);
+    haze_mu_channel_close ((TpSvcChannel *) self, context);
 }
 
 static void
@@ -216,12 +221,12 @@ destroyable_iface_init (gpointer g_iface,
     TpSvcChannelInterfaceDestroyableClass *klass = g_iface;
 
 #define IMPLEMENT(x) tp_svc_channel_interface_destroyable_implement_##x (\
-    klass, haze_im_channel_##x)
+    klass, haze_mu_channel_##x)
     IMPLEMENT(destroy);
 #undef IMPLEMENT
 }
 
-const gchar *typing_state_names[] = {
+static const gchar *typing_state_names[] = {
     "not typing",
     "typing",
     "typed"
@@ -249,13 +254,12 @@ resend_typing_cb (gpointer data)
     }
 }
 
-
 static void
-haze_im_channel_set_chat_state (TpSvcChannelInterfaceChatState *self,
+haze_mu_channel_set_chat_state (TpSvcChannelInterfaceChatState *self,
                                 guint state,
                                 DBusGMethodInvocation *context)
 {
-    HazeIMChannel *chan = HAZE_IM_CHANNEL (self);
+    HazeMUChannel *chan = HAZE_MU_CHANNEL (self);
 
     PurpleConversation *conv = chan->priv->conv;
     HazeConversationUiData *ui_data = PURPLE_CONV_GET_HAZE_UI_DATA (conv);
@@ -332,17 +336,17 @@ chat_state_iface_init (gpointer g_iface, gpointer iface_data)
     TpSvcChannelInterfaceChatStateClass *klass =
         (TpSvcChannelInterfaceChatStateClass *)g_iface;
 #define IMPLEMENT(x) tp_svc_channel_interface_chat_state_implement_##x (\
-    klass, haze_im_channel_##x)
+    klass, haze_mu_channel_##x)
     IMPLEMENT(set_chat_state);
 #undef IMPLEMENT
 }
 
 static void
-haze_im_channel_send (GObject *obj,
+haze_mu_channel_send (GObject *obj,
                       TpMessage *message,
                       TpMessageSendingFlags send_flags)
 {
-  HazeIMChannel *self = HAZE_IM_CHANNEL (obj);
+  HazeMUChannel *self = HAZE_MU_CHANNEL (obj);
   const GHashTable *header, *body;
   const gchar *content_type, *text;
   guint type = 0;
@@ -411,7 +415,7 @@ haze_im_channel_send (GObject *obj,
    */
   reapostrophised = purple_strreplace (line_broken, "&apos;", "'");
 
-  purple_conv_im_send_with_flags (PURPLE_CONV_IM (self->priv->conv),
+  purple_conv_chat_send_with_flags (PURPLE_CONV_CHAT (self->priv->conv),
       reapostrophised, flags);
 
   g_free (reapostrophised);
@@ -428,13 +432,13 @@ err:
 }
 
 static void
-haze_im_channel_get_property (GObject    *object,
+haze_mu_channel_get_property (GObject    *object,
                               guint       property_id,
                               GValue     *value,
                               GParamSpec *pspec)
 {
-    HazeIMChannel *chan = HAZE_IM_CHANNEL (object);
-    HazeIMChannelPrivate *priv = chan->priv;
+    HazeMUChannel *chan = HAZE_MU_CHANNEL (object);
+    HazeMUChannelPrivate *priv = chan->priv;
     TpBaseConnection *base_conn = (TpBaseConnection *) priv->conn;
 
     switch (property_id) {
@@ -477,7 +481,7 @@ haze_im_channel_get_property (GObject    *object,
             g_value_set_object (value, priv->conn);
             break;
         case PROP_INTERFACES:
-            g_value_set_boxed (value, _haze_im_channel_interfaces (chan));
+            g_value_set_boxed (value, _haze_mu_channel_interfaces (chan));
             break;
         case PROP_CHANNEL_DESTROYED:
             g_value_set_boolean (value, priv->closed);
@@ -509,13 +513,13 @@ haze_im_channel_get_property (GObject    *object,
 }
 
 static void
-haze_im_channel_set_property (GObject     *object,
+haze_mu_channel_set_property (GObject     *object,
                               guint        property_id,
                               const GValue *value,
                               GParamSpec   *pspec)
 {
-    HazeIMChannel *chan = HAZE_IM_CHANNEL (object);
-    HazeIMChannelPrivate *priv = chan->priv;
+    HazeMUChannel *chan = HAZE_MU_CHANNEL (object);
+    HazeMUChannelPrivate *priv = chan->priv;
 
     switch (property_id) {
         case PROP_OBJECT_PATH:
@@ -559,21 +563,31 @@ static const gchar * const supported_content_types[] = {
 };
 
 static void
-haze_im_channel_constructed (GObject *obj)
+haze_mu_channel_constructed (GObject *obj)
 {
-    HazeIMChannel *chan = HAZE_IM_CHANNEL (obj);
-    HazeIMChannelPrivate *priv = chan->priv;
+    HazeMUChannel *chan = HAZE_MU_CHANNEL (obj);
+    HazeMUChannelPrivate *priv = chan->priv;
     TpBaseConnection *conn = (TpBaseConnection *) (priv->conn);
+    TpHandleRepoIface *contact_handles =
+        tp_base_connection_get_handles(conn, TP_HANDLE_TYPE_CONTACT);
+    TpHandle self_handle = tp_base_connection_get_self_handle (conn);
     TpDBusDaemon *bus;
 
-    G_OBJECT_CLASS (haze_im_channel_parent_class)->constructed (obj);
+    G_OBJECT_CLASS (haze_mu_channel_parent_class)->constructed (obj);
 
     g_assert (priv->initiator != 0);
 
-    tp_message_mixin_init (obj, G_STRUCT_OFFSET (HazeIMChannel, messages),
+    tp_group_mixin_init(obj, G_STRUCT_OFFSET(HazeMUChannel, group),
+        contact_handles, self_handle);
+    tp_group_mixin_change_flags(obj, TP_CHANNEL_GROUP_FLAG_PROPERTIES, 0);
+
+    tp_message_mixin_init (obj, G_STRUCT_OFFSET (HazeMUChannel, messages),
         conn);
-    tp_message_mixin_implement_sending (obj, haze_im_channel_send, 3,
-        supported_message_types, 0, 0, supported_content_types);
+    tp_message_mixin_implement_sending (obj, haze_mu_channel_send,
+        G_N_ELEMENTS (supported_message_types), supported_message_types, 0,
+        TP_DELIVERY_REPORTING_SUPPORT_FLAG_RECEIVE_SUCCESSES |
+        TP_DELIVERY_REPORTING_SUPPORT_FLAG_RECEIVE_FAILURES,
+        supported_content_types);
 
     bus = tp_base_connection_get_dbus_daemon (conn);
     tp_dbus_daemon_register_object (bus, priv->object_path, obj);
@@ -583,13 +597,14 @@ haze_im_channel_constructed (GObject *obj)
 }
 
 static void
-haze_im_channel_dispose (GObject *obj)
+haze_mu_channel_dispose (GObject *obj)
 {
-    HazeIMChannel *chan = HAZE_IM_CHANNEL (obj);
-    HazeIMChannelPrivate *priv = chan->priv;
+    HazeMUChannel *chan = HAZE_MU_CHANNEL (obj);
+    HazeMUChannelPrivate *priv = chan->priv;
 
     if (priv->dispose_has_run)
         return;
+
     priv->dispose_has_run = TRUE;
 
     if (!priv->closed)
@@ -602,12 +617,29 @@ haze_im_channel_dispose (GObject *obj)
 
     g_free (priv->object_path);
     tp_message_mixin_finalize (obj);
+    tp_group_mixin_finalize(obj);
 
-    G_OBJECT_CLASS (haze_im_channel_parent_class)->dispose (obj);
+    G_OBJECT_CLASS (haze_mu_channel_parent_class)->dispose (obj);
+}
+
+static gboolean
+haze_mu_channel_add_member(GObject *gobj, TpHandle handle, const gchar *message,
+    GError **error)
+{
+    DEBUG("");
+    return TRUE;
+}
+
+static gboolean
+haze_mu_channel_remove_member(GObject *gobj, TpHandle handle,
+const gchar *message, GError **error)
+{
+    DEBUG("");
+    return TRUE;
 }
 
 static void
-haze_im_channel_class_init (HazeIMChannelClass *klass)
+haze_mu_channel_class_init (HazeMUChannelClass *klass)
 {
     GObjectClass *object_class = G_OBJECT_CLASS (klass);
     GParamSpec *param_spec;
@@ -633,12 +665,12 @@ haze_im_channel_class_init (HazeIMChannelClass *klass)
         { NULL }
     };
 
-    g_type_class_add_private (klass, sizeof (HazeIMChannelPrivate));
+    g_type_class_add_private (klass, sizeof (HazeMUChannelPrivate));
 
-    object_class->get_property = haze_im_channel_get_property;
-    object_class->set_property = haze_im_channel_set_property;
-    object_class->constructed = haze_im_channel_constructed;
-    object_class->dispose = haze_im_channel_dispose;
+    object_class->get_property = haze_mu_channel_get_property;
+    object_class->set_property = haze_mu_channel_set_property;
+    object_class->constructed = haze_mu_channel_constructed;
+    object_class->dispose = haze_mu_channel_dispose;
 
     g_object_class_override_property (object_class, PROP_OBJECT_PATH,
         "object-path");
@@ -697,24 +729,31 @@ haze_im_channel_class_init (HazeIMChannelClass *klass)
         properties_mixin_initialized = TRUE;
         klass->properties_class.interfaces = prop_interfaces;
         tp_dbus_properties_mixin_class_init (object_class,
-            G_STRUCT_OFFSET (HazeIMChannelClass, properties_class));
+            G_STRUCT_OFFSET (HazeMUChannelClass, properties_class));
 
         tp_message_mixin_init_dbus_properties (object_class);
+
+        tp_group_mixin_class_init(object_class,
+            G_STRUCT_OFFSET(HazeMUChannelClass, group_class),
+            haze_mu_channel_add_member, haze_mu_channel_remove_member);
+
+        tp_group_mixin_init_dbus_properties (object_class);
+        tp_group_mixin_class_allow_self_removal (object_class);
     }
 }
 
 static void
-haze_im_channel_init (HazeIMChannel *self)
+haze_mu_channel_init (HazeMUChannel *self)
 {
-    self->priv = G_TYPE_INSTANCE_GET_PRIVATE (self, HAZE_TYPE_IM_CHANNEL,
-                                              HazeIMChannelPrivate);
+    self->priv = G_TYPE_INSTANCE_GET_PRIVATE (self, HAZE_TYPE_MU_CHANNEL,
+                                              HazeMUChannelPrivate);
 }
 
 void
-haze_im_channel_start (HazeIMChannel *self)
+haze_mu_channel_start (HazeMUChannel *self)
 {
     const char *recipient;
-    HazeIMChannelPrivate *priv = self->priv;
+    HazeMUChannelPrivate *priv = self->priv;
     TpHandleRepoIface *contact_handles;
     TpBaseConnection *base_conn = (TpBaseConnection *) priv->conn;
 
@@ -722,52 +761,46 @@ haze_im_channel_start (HazeIMChannel *self)
         TP_HANDLE_TYPE_CONTACT);
     recipient = tp_handle_inspect(contact_handles, priv->handle);
     priv->conv = purple_find_conversation_with_account(
-        PURPLE_CONV_TYPE_IM, recipient, priv->conn->account);
+        PURPLE_CONV_TYPE_CHAT, recipient, priv->conn->account);
 
     if (!priv->conv)
     {
         priv->conv = purple_conversation_new (
-            PURPLE_CONV_TYPE_IM, priv->conn->account, recipient);
+            PURPLE_CONV_TYPE_CHAT, priv->conn->account, recipient);
     }
 }
 
 static TpMessage *
-_make_message (HazeIMChannel *self,
-               char *text_plain,
-               PurpleMessageFlags flags,
-               time_t mtime)
+_make_message (HazeMUChannel *self, char *text_plain, PurpleMessageFlags flags,
+    time_t mtime)
 {
-  TpBaseConnection *base_conn = (TpBaseConnection *) self->priv->conn;
-  TpMessage *message = tp_cm_message_new (base_conn, 2);
-  TpChannelTextMessageType type = TP_CHANNEL_TEXT_MESSAGE_TYPE_NORMAL;
-  time_t now = time (NULL);
+    TpBaseConnection *base_conn = (TpBaseConnection *) self->priv->conn;
+    TpMessage *message = tp_cm_message_new (base_conn, 2);
+    TpChannelTextMessageType type = TP_CHANNEL_TEXT_MESSAGE_TYPE_NORMAL;
+    time_t now = time (NULL);
 
-  if (flags & PURPLE_MESSAGE_AUTO_RESP)
-    type = TP_CHANNEL_TEXT_MESSAGE_TYPE_AUTO_REPLY;
-  else if (purple_message_meify (text_plain, -1))
-    type = TP_CHANNEL_TEXT_MESSAGE_TYPE_ACTION;
+    if (flags & PURPLE_MESSAGE_AUTO_RESP)
+        type = TP_CHANNEL_TEXT_MESSAGE_TYPE_AUTO_REPLY;
+    else if (purple_message_meify (text_plain, -1))
+        type = TP_CHANNEL_TEXT_MESSAGE_TYPE_ACTION;
 
-  tp_cm_message_set_sender (message, self->priv->handle);
-  tp_message_set_uint32 (message, 0, "message-type", type);
+    tp_cm_message_set_sender (message, self->priv->handle);
+    tp_message_set_uint32 (message, 0, "message-type", type);
 
-  /* FIXME: the second half of this test shouldn't be necessary but prpl-jabber
-   *        or the test are broken.
-   */
-  if (flags & PURPLE_MESSAGE_DELAYED || mtime != now)
-    tp_message_set_int64 (message, 0, "message-sent", mtime);
+    if (flags & PURPLE_MESSAGE_DELAYED)
+        tp_message_set_int64 (message, 0, "message-sent", mtime);
 
-  tp_message_set_int64 (message, 0, "message-received", now);
+    tp_message_set_int64 (message, 0, "message-received", now);
 
-  /* Body */
-  tp_message_set_string (message, 1, "content-type", "text/plain");
-  tp_message_set_string (message, 1, "content", text_plain);
+    /* Body */
+    tp_message_set_string (message, 1, "content-type", "text/plain");
+    tp_message_set_string (message, 1, "content", text_plain);
 
-  return message;
+    return message;
 }
 
 static TpMessage *
-_make_delivery_report (HazeIMChannel *self,
-                       char *text_plain)
+_make_delivery_report (HazeMUChannel *self, char *text_plain)
 {
   TpBaseConnection *base_conn = (TpBaseConnection *) self->priv->conn;
   TpMessage *report = tp_cm_message_new (base_conn, 2);
@@ -791,33 +824,110 @@ _make_delivery_report (HazeIMChannel *self,
 }
 
 void
-haze_im_channel_receive (HazeIMChannel *self,
-                         const char *xhtml_message,
-                         PurpleMessageFlags flags,
-                         time_t mtime)
+haze_mu_channel_receive (HazeMUChannel *self, const char *who,
+    const char *xhtml_message, PurpleMessageFlags flags, time_t mtime)
 {
-  gchar *line_broken, *text_plain;
+    HazeMUChannelPrivate *priv = self->priv;
+    gchar *line_broken, *text_plain;
 
-  /* Replaces newline characters with <br>, which then get turned back into
-   * newlines by purple_markup_strip_html (which replaces "\n" with " ")...
-   */
-  line_broken = purple_strdup_withhtml (xhtml_message);
-  text_plain = purple_markup_strip_html (line_broken);
-  g_free (line_broken);
+    /* Replaces newline characters with <br>, which then get turned back into
+     * newlines by purple_markup_strip_html (which replaces "\n" with " ")...
+     */
+    line_broken = purple_strdup_withhtml (xhtml_message);
+    text_plain = purple_markup_strip_html (line_broken);
+    g_free (line_broken);
 
-  if (flags & PURPLE_MESSAGE_RECV)
-    tp_message_mixin_take_received ((GObject *) self,
-        _make_message (self, text_plain, flags, mtime));
-  else if (flags & PURPLE_MESSAGE_SEND)
+    if (flags & PURPLE_MESSAGE_RECV)
     {
-      /* Do nothing: the message mixin emitted sent for us. */
+        tp_message_mixin_take_received ((GObject *) self, _make_message (self,
+            text_plain, flags, mtime));
     }
-  else if (flags & PURPLE_MESSAGE_ERROR)
-    tp_message_mixin_take_received ((GObject *) self,
-        _make_delivery_report (self, text_plain));
-  else
-    DEBUG ("channel %u: ignoring message %s with flags %u",
-        self->priv->handle, text_plain, flags);
+    else if (flags & PURPLE_MESSAGE_SEND)
+    {
+        /* We might have messages that do not originate from our channel,
+         * send the as delivery reports
+         */
+        TpBaseConnection *conn = (TpBaseConnection *) (priv->conn);
+        TpHandleRepoIface *contact_handles =
+            tp_base_connection_get_handles (conn, TP_HANDLE_TYPE_CONTACT);
+        TpHandle handle = tp_handle_ensure (contact_handles, who, NULL, NULL);
 
-  g_free (text_plain);
+        if (handle == tp_base_connection_get_self_handle (conn))
+        {
+            TpMessage *message = _make_message (self, text_plain, flags, mtime);
+            TpMessage *delivery_report = tp_cm_message_new (conn, 1);
+
+
+            tp_cm_message_set_sender (message, handle);
+            tp_cm_message_set_sender (delivery_report, self->priv->handle);
+            tp_message_set_uint32 (delivery_report, 0, "message-type",
+                TP_CHANNEL_TEXT_MESSAGE_TYPE_DELIVERY_REPORT);
+            tp_message_set_uint32 (delivery_report, 0, "delivery-status",
+                TP_DELIVERY_STATUS_DELIVERED);
+            tp_cm_message_take_message (delivery_report, 0, "delivery-echo",
+                message);
+
+            tp_message_mixin_take_received ((GObject *) self, delivery_report);
+        }
+    }
+    else if (flags & PURPLE_MESSAGE_ERROR)
+    {
+        tp_message_mixin_take_received ((GObject *) self,
+            _make_delivery_report (self, text_plain));
+    }
+    else
+    {
+        DEBUG ("channel %u: ignoring message %s with flags %u",
+               self->priv->handle, text_plain, flags);
+    }
+
+    g_free (text_plain);
+}
+
+void
+haze_mu_channel_add_users (HazeMUChannel *self, GList *cbuddies,
+    gboolean new_arrivals)
+{
+    HazeMUChannelPrivate *priv = self->priv;
+    TpHandleRepoIface *contact_handles = tp_base_connection_get_handles (
+        (TpBaseConnection *) priv->conn, TP_HANDLE_TYPE_CONTACT);
+    TpIntset *add_set = tp_intset_new();
+
+    for (; cbuddies; cbuddies = cbuddies->next)
+    {
+        PurpleConvChatBuddy *buddy = cbuddies->data;
+        TpHandle handle = tp_handle_ensure (
+            contact_handles, buddy->name, NULL, NULL);
+
+        if (handle)
+            tp_intset_add(add_set, handle);
+    }
+
+    tp_group_mixin_change_members(G_OBJECT(self), NULL, add_set, NULL, NULL,
+        NULL, priv->handle, TP_CHANNEL_GROUP_CHANGE_REASON_NONE);
+
+    tp_intset_destroy(add_set);
+}
+
+void
+haze_mu_channel_remove_users(HazeMUChannel *self, GList *users)
+{
+    HazeMUChannelPrivate *priv = self->priv;
+    TpHandleRepoIface *contact_handles = tp_base_connection_get_handles (
+        (TpBaseConnection *) priv->conn, TP_HANDLE_TYPE_CONTACT);
+    TpIntset *remove_set = tp_intset_new();
+
+    for (; users; users = users->next)
+    {
+        const char *user = users->data;
+        TpHandle handle = tp_handle_ensure (contact_handles, user, NULL, NULL);
+
+        if (handle)
+            tp_intset_add(remove_set, handle);
+    }
+
+    tp_group_mixin_change_members(G_OBJECT(self), NULL, NULL, remove_set, NULL,
+        NULL, priv->handle, TP_CHANNEL_GROUP_CHANGE_REASON_NONE);
+
+    tp_intset_destroy(remove_set);
 }

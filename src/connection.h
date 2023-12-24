@@ -32,6 +32,7 @@
 
 #include "contact-list.h"
 #include "im-channel-factory.h"
+#include "mu-channel-manager.h"
 #include "media-manager.h"
 
 G_BEGIN_DECLS
@@ -54,6 +55,7 @@ struct _HazeConnection {
 
     HazeContactList *contact_list;
     HazeImChannelFactory *im_factory;
+    HazeMuChannelManager *muc_manager;
     HazeMediaManager *media_manager;
     TpSimplePasswordManager *password_manager;
 

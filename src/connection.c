@@ -620,6 +620,14 @@ _haze_connection_create_channel_managers (TpBaseConnection *base)
       }
 #endif
 
+    if (PURPLE_PROTOCOL_PLUGIN_HAS_FUNC (self->priv->prpl_info, chat_send))
+      {
+        self->muc_manager = HAZE_MU_CHANNEL_MANAGER (
+            g_object_new (HAZE_TYPE_MU_CHANNEL_MANAGER, "connection", self,
+            NULL));
+        g_ptr_array_add (channel_managers, self->muc_manager);
+      }
+
     self->contact_list = HAZE_CONTACT_LIST (
         g_object_new (HAZE_TYPE_CONTACT_LIST, "connection", self, NULL));
     g_ptr_array_add (channel_managers, self->contact_list);
