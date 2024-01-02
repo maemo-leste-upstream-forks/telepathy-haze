@@ -1,0 +1,7 @@
+telepathy-haze (0.8.1-0) unstable; urgency=medium
+
+  * new upstream release
+  * include experimental multi-user channel support
+
+ -- Ivaylo Dimitrov <ivo.g.dimitrov.75@gmail.com>  Tue, 02 Jan 2024 16:38:33 +0200
+
