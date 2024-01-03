@@ -784,7 +784,6 @@ _make_message (HazeMUChannel *self, char *text_plain, PurpleMessageFlags flags,
     else if (purple_message_meify (text_plain, -1))
         type = TP_CHANNEL_TEXT_MESSAGE_TYPE_ACTION;
 
-    tp_cm_message_set_sender (message, self->priv->handle);
     tp_message_set_uint32 (message, 0, "message-type", type);
 
     if (flags & PURPLE_MESSAGE_DELAYED)
@@ -828,7 +827,11 @@ haze_mu_channel_receive (HazeMUChannel *self, const char *who,
     const char *xhtml_message, PurpleMessageFlags flags, time_t mtime)
 {
     HazeMUChannelPrivate *priv = self->priv;
+    TpBaseConnection *conn = (TpBaseConnection *) (priv->conn);
     gchar *line_broken, *text_plain;
+    TpHandleRepoIface *contact_handles =
+        tp_base_connection_get_handles (conn, TP_HANDLE_TYPE_CONTACT);
+    TpHandle handle = tp_handle_ensure (contact_handles, who, NULL, NULL);
 
     /* Replaces newline characters with <br>, which then get turned back into
      * newlines by purple_markup_strip_html (which replaces "\n" with " ")...
@@ -839,35 +842,37 @@ haze_mu_channel_receive (HazeMUChannel *self, const char *who,
 
     if (flags & PURPLE_MESSAGE_RECV)
     {
-        tp_message_mixin_take_received ((GObject *) self, _make_message (self,
-            text_plain, flags, mtime));
+        TpMessage *message = _make_message (self, text_plain, flags, mtime);
+
+        tp_cm_message_set_sender (message, handle);
+        tp_message_mixin_take_received ((GObject *) self, message);
     }
     else if (flags & PURPLE_MESSAGE_SEND)
     {
-        /* We might have messages that do not originate from our channel,
-         * send the as delivery reports
-         */
-        TpBaseConnection *conn = (TpBaseConnection *) (priv->conn);
-        TpHandleRepoIface *contact_handles =
-            tp_base_connection_get_handles (conn, TP_HANDLE_TYPE_CONTACT);
-        TpHandle handle = tp_handle_ensure (contact_handles, who, NULL, NULL);
-
         if (handle == tp_base_connection_get_self_handle (conn))
         {
             TpMessage *message = _make_message (self, text_plain, flags, mtime);
-            TpMessage *delivery_report = tp_cm_message_new (conn, 1);
 
+            if (flags & PURPLE_MESSAGE_REMOTE_SEND)
+            {
+              tp_cm_message_set_sender (message, handle);
+              tp_message_set_boolean (message, 0, "scrollback", TRUE);
+              tp_message_mixin_take_received ((GObject *) self, message);
+            }
+            else
+            {
+              TpMessage *delivery_report = tp_cm_message_new (conn, 1);
 
-            tp_cm_message_set_sender (message, handle);
-            tp_cm_message_set_sender (delivery_report, self->priv->handle);
-            tp_message_set_uint32 (delivery_report, 0, "message-type",
-                TP_CHANNEL_TEXT_MESSAGE_TYPE_DELIVERY_REPORT);
-            tp_message_set_uint32 (delivery_report, 0, "delivery-status",
-                TP_DELIVERY_STATUS_DELIVERED);
-            tp_cm_message_take_message (delivery_report, 0, "delivery-echo",
-                message);
+              tp_cm_message_set_sender (delivery_report, self->priv->handle);
+              tp_message_set_uint32 (delivery_report, 0, "message-type",
+                  TP_CHANNEL_TEXT_MESSAGE_TYPE_DELIVERY_REPORT);
+              tp_message_set_uint32 (delivery_report, 0, "delivery-status",
+                  TP_DELIVERY_STATUS_DELIVERED);
+              tp_cm_message_take_message (delivery_report, 0, "delivery-echo",
+                  message);
 
-            tp_message_mixin_take_received ((GObject *) self, delivery_report);
+              tp_message_mixin_take_received ((GObject *) self, delivery_report);
+            }
         }
     }
     else if (flags & PURPLE_MESSAGE_ERROR)
