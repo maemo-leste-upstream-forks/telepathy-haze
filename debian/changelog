@@ -1,3 +1,10 @@
+telepathy-haze (0.8.1-1) unstable; urgency=medium
+
+  * add room handle repo
+  * fix own messages processing
+
+ -- Ivaylo Dimitrov <ivo.g.dimitrov.75@gmail.com>  Wed, 03 Jan 2024 16:45:52 +0200
+
 telepathy-haze (0.8.1-0) unstable; urgency=medium
 
   * new upstream release
