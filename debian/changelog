@@ -1,4 +1,4 @@
-telepathy-haze (0.8.1-1) unstable; urgency=medium
+telepathy-haze (0.8.2-0) unstable; urgency=medium
 
   * add room handle repo
   * fix own messages processing
