@@ -590,6 +590,17 @@ _contact_normalize (TpHandleRepoIface *repo,
     return g_strdup (purple_normalize (account, id));
 }
 
+static gchar*
+_room_normalize (TpHandleRepoIface *repo,
+                 const gchar *id,
+                 gpointer context,
+                 GError **error)
+{
+    HazeConnection *conn = HAZE_CONNECTION (context);
+    PurpleAccount *account = conn->account;
+    return g_strdup (purple_normalize (account, id));
+}
+
 static void
 _haze_connection_create_handle_repos (TpBaseConnection *base,
         TpHandleRepoIface *repos[NUM_TP_HANDLE_TYPES])
@@ -597,7 +608,9 @@ _haze_connection_create_handle_repos (TpBaseConnection *base,
     repos[TP_HANDLE_TYPE_CONTACT] =
         tp_dynamic_handle_repo_new (TP_HANDLE_TYPE_CONTACT, _contact_normalize,
                                     base);
-    /* repos[TP_HANDLE_TYPE_ROOM] = XXX MUC */
+    repos[TP_HANDLE_TYPE_ROOM] =
+        tp_dynamic_handle_repo_new (TP_HANDLE_TYPE_ROOM, _room_normalize,
+                                    base);
 }
 
 static GPtrArray *
