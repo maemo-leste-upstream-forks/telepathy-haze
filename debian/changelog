@@ -1,3 +1,9 @@
+telepathy-haze (0.8.3-0) unstable; urgency=medium
+
+  * muc: fix target handle type
+
+ -- Ivaylo Dimitrov <ivo.g.dimitrov.75@gmail.com>  Thu, 04 Jan 2024 14:16:33 +0200
+
 telepathy-haze (0.8.2-0) unstable; urgency=medium
 
   * add room handle repo
