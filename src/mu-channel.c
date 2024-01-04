@@ -449,7 +449,7 @@ haze_mu_channel_get_property (GObject    *object,
             g_value_set_static_string (value, TP_IFACE_CHANNEL_TYPE_TEXT);
             break;
         case PROP_HANDLE_TYPE:
-            g_value_set_uint (value, TP_HANDLE_TYPE_CONTACT);
+            g_value_set_uint (value, TP_HANDLE_TYPE_ROOM);
             break;
         case PROP_HANDLE:
             g_value_set_uint (value, priv->handle);
