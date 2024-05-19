@@ -373,19 +373,25 @@ haze_mu_channel_manager_foreach (TpChannelManager *iface,
     g_hash_table_foreach (self->priv->channels, _foreach_slave, &data);
 }
 
+static HazeMUChannel *
+haze_mu_get_chanel(PurpleConversation *conv)
+{
+    PurpleAccount *account = purple_conversation_get_account (conv);
+    HazeMuChannelManager *muc_manager =
+            ACCOUNT_GET_HAZE_CONNECTION (account)->muc_manager;
+    HazeConversationUiData *ui_data = PURPLE_CONV_GET_HAZE_UI_DATA (conv);
+
+    return get_mu_channel (muc_manager, ui_data->contact_handle,
+                           ui_data->contact_handle, NULL, NULL);
+}
 
 static void
 haze_mu_write_chat (PurpleConversation *conv, const char *who,
     const char *xhtml_message, PurpleMessageFlags flags, time_t mtime)
 {
-    PurpleAccount *account = purple_conversation_get_account (conv);
-    HazeMuChannelManager *muc_manager =
-        ACCOUNT_GET_HAZE_CONNECTION (account)->muc_manager;
-    HazeConversationUiData *ui_data = PURPLE_CONV_GET_HAZE_UI_DATA (conv);
-    HazeMUChannel *chan = get_mu_channel (muc_manager, ui_data->contact_handle,
-        ui_data->contact_handle, NULL, NULL);
 
-    haze_mu_channel_receive (chan, who, xhtml_message, flags, mtime);
+    haze_mu_channel_receive (haze_mu_get_chanel(conv), who, xhtml_message,
+                             flags, mtime);
 }
 
 static void
@@ -400,27 +406,13 @@ static void
 haze_mu_chat_add_users(PurpleConversation *conv, GList *cbuddies,
     gboolean new_arrivals)
 {
-    PurpleAccount *account = purple_conversation_get_account (conv);
-    HazeMuChannelManager *muc_manager =
-        ACCOUNT_GET_HAZE_CONNECTION (account)->muc_manager;
-    HazeConversationUiData *ui_data = PURPLE_CONV_GET_HAZE_UI_DATA (conv);
-    HazeMUChannel *chan = get_mu_channel (muc_manager, ui_data->contact_handle,
-        ui_data->contact_handle, NULL, NULL);
-
-    haze_mu_channel_add_users(chan, cbuddies, new_arrivals);
+    haze_mu_channel_add_users(haze_mu_get_chanel(conv), cbuddies, new_arrivals);
 }
 
 static void
 haze_mu_chat_remove_users(PurpleConversation *conv, GList *users)
 {
-    PurpleAccount *account = purple_conversation_get_account (conv);
-    HazeMuChannelManager *muc_manager =
-        ACCOUNT_GET_HAZE_CONNECTION (account)->muc_manager;
-    HazeConversationUiData *ui_data = PURPLE_CONV_GET_HAZE_UI_DATA (conv);
-    HazeMUChannel *chan = get_mu_channel (muc_manager, ui_data->contact_handle,
-        ui_data->contact_handle, NULL, NULL);
-
-    haze_mu_channel_remove_users(chan, users);
+    haze_mu_channel_remove_users(haze_mu_get_chanel(conv), users);
 }
 
 static void
