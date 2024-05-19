@@ -57,6 +57,8 @@ struct _HazeImChannelFactoryClass {
 
 GType haze_im_channel_factory_get_type (void) G_GNUC_CONST;
 
+void haze_im_create_conversation (PurpleConversation *conv);
+
 G_END_DECLS
 
 #endif /* __HAZE_IM_CHANNEL_FACTORY_H__ */

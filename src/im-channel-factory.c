@@ -44,7 +44,6 @@ struct _HazeImChannelFactoryPrivate {
 };
 
 static void channel_manager_iface_init (gpointer, gpointer);
-static void haze_im_create_conversation (PurpleConversation *conv);
 static void haze_im_destroy_conversation (PurpleConversation *conv);
 static void haze_im_write_im (PurpleConversation *conv, const char *who,
     const char *xhtml_message, PurpleMessageFlags flags, time_t mtime);
@@ -215,7 +214,6 @@ haze_im_channel_factory_class_init (HazeImChannelFactoryClass *klass)
     GObjectClass *object_class = G_OBJECT_CLASS (klass);
     GParamSpec *param_spec;
     void *conv_handle = purple_conversations_get_handle();
-    PurpleConversationUiOps *ui_ops = haze_get_conversation_ui_ops();
 
     object_class->constructed = haze_im_channel_factory_constructed;
     object_class->dispose = haze_im_channel_factory_dispose;
@@ -237,12 +235,6 @@ haze_im_channel_factory_class_init (HazeImChannelFactoryClass *klass)
 
     purple_signal_connect (conv_handle, "conversation-updated", klass,
         (PurpleCallback) conversation_updated_cb, NULL);
-    haze_set_conversation_ui_im_create_conversation(
-        haze_im_create_conversation);
-    haze_set_conversation_ui_im_destroy_conversation(
-        haze_im_destroy_conversation);
-    haze_set_conversation_ui_im_write_conv(haze_im_write_conv);
-    ui_ops->write_im = haze_im_write_im;
 }
 
 static void
@@ -429,7 +421,7 @@ haze_im_write_conv (PurpleConversation *conv,
     haze_im_write_im (conv, name, message, flags, mtime);
 }
 
-static void
+void
 haze_im_create_conversation (PurpleConversation *conv)
 {
     PurpleAccount *account = purple_conversation_get_account (conv);
@@ -443,15 +435,23 @@ haze_im_create_conversation (PurpleConversation *conv)
     const gchar *who = purple_conversation_get_name (conv);
 
     HazeConversationUiData *ui_data;
+    PurpleConversationUiOps *ui_ops;
 
     DEBUG ("(PurpleConversation *)%p created", conv);
 
     g_assert (who);
 
-    conv->ui_data = ui_data = g_slice_new0 (HazeConversationUiData);
-
+    ui_data = g_slice_new0 (HazeConversationUiData);
     ui_data->contact_handle = tp_handle_ensure (contact_repo, who, NULL, NULL);
     g_assert (ui_data->contact_handle);
+
+    ui_ops = &ui_data->ui_ops;
+    ui_ops->destroy_conversation = haze_im_destroy_conversation;
+    ui_ops->write_conv = haze_im_write_conv;
+    ui_ops->write_im = haze_im_write_im;
+
+    purple_conversation_set_ui_ops (conv, &ui_data->ui_ops);
+    conv->ui_data = ui_data;
 }
 
 static void

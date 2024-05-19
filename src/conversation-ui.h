@@ -33,6 +33,8 @@ struct _HazeConversationUiData
 {
     TpHandle contact_handle;
 
+    PurpleConversationUiOps ui_ops;
+
     PurpleTypingState active_state;
     guint resend_typing_timeout_id;
 };
@@ -41,26 +43,6 @@ struct _HazeConversationUiData
     ((HazeConversationUiData *) conv->ui_data)
 
 PurpleConversationUiOps *haze_get_conversation_ui_ops (void);
-
-void haze_set_conversation_ui_chat_create_conversation (
-    void (*cb)(PurpleConversation *conv));
-
-void haze_set_conversation_ui_im_create_conversation (
-    void (*cb)(PurpleConversation *conv));
-
-void haze_set_conversation_ui_chat_destroy_conversation (
-    void (*cb)(PurpleConversation *conv));
-
-void haze_set_conversation_ui_im_destroy_conversation (
-    void (*cb)(PurpleConversation *conv));
-
-void haze_set_conversation_ui_im_write_conv (
-    void (*cb)(PurpleConversation *conv, const char *name, const char *alias,
-    const char *message, PurpleMessageFlags flags, time_t mtime));
-
-void haze_set_conversation_ui_chat_write_conv (
-    void (*cb)(PurpleConversation *conv, const char *name, const char *alias,
-    const char *message, PurpleMessageFlags flags, time_t mtime));
 
 G_END_DECLS
 

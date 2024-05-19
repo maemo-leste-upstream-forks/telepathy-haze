@@ -58,6 +58,8 @@ struct _HazeMuChannelManagerClass {
 
 GType haze_mu_channel_manager_get_type (void) G_GNUC_CONST;
 
+void haze_mu_create_conversation (PurpleConversation *conv);
+
 G_END_DECLS
 
 #endif /* __HAZE_MU_CHANNEL_MANAGER_H__ */

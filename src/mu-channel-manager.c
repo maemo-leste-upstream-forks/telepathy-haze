@@ -39,7 +39,6 @@ struct _HazeMuChannelManagerPrivate {
 
 static void haze_mu_channel_manager_iface_init (gpointer, gpointer);
 static void close_all (HazeMuChannelManager *self);
-static void haze_mu_create_conversation (PurpleConversation *conv);
 static void haze_mu_destroy_conversation (PurpleConversation *conv);
 static void haze_mu_write_chat (PurpleConversation *conv, const char *name,
     const char *xhtml_message, PurpleMessageFlags flags, time_t mtime);
@@ -289,7 +288,6 @@ haze_mu_channel_manager_class_init (HazeMuChannelManagerClass *klass)
     GObjectClass *object_class = G_OBJECT_CLASS (klass);
     void *conv_handle = purple_conversations_get_handle();
     GParamSpec *param_spec;
-    PurpleConversationUiOps *ui_ops = haze_get_conversation_ui_ops();
 
     object_class->constructed = haze_mu_channel_manager_constructed;
     object_class->dispose = haze_mu_channel_manager_dispose;
@@ -311,14 +309,6 @@ haze_mu_channel_manager_class_init (HazeMuChannelManagerClass *klass)
 
     purple_signal_connect (conv_handle, "conversation-updated", klass,
         (PurpleCallback) conversation_updated_cb, NULL);
-    haze_set_conversation_ui_chat_create_conversation(
-        haze_mu_create_conversation);
-    haze_set_conversation_ui_chat_destroy_conversation(
-        haze_mu_destroy_conversation);
-    haze_set_conversation_ui_chat_write_conv(haze_mu_write_conv);
-    ui_ops->write_chat = haze_mu_write_chat;
-    ui_ops->chat_add_users = haze_mu_chat_add_users;
-    ui_ops->chat_remove_users = haze_mu_chat_remove_users;
 }
 
 static void
@@ -415,7 +405,7 @@ haze_mu_chat_remove_users(PurpleConversation *conv, GList *users)
     haze_mu_channel_remove_users(haze_mu_get_chanel(conv), users);
 }
 
-static void
+void
 haze_mu_create_conversation (PurpleConversation *conv)
 {
     PurpleAccount *account = purple_conversation_get_account (conv);
@@ -429,15 +419,25 @@ haze_mu_create_conversation (PurpleConversation *conv)
     const gchar *who = purple_conversation_get_name (conv);
 
     HazeConversationUiData *ui_data;
-
+    PurpleConversationUiOps *ui_ops;
     DEBUG ("(PurpleConversation *)%p created", conv);
 
     g_assert (who);
 
-    conv->ui_data = ui_data = g_slice_new0 (HazeConversationUiData);
-
+    ui_data = g_slice_new0 (HazeConversationUiData);
     ui_data->contact_handle = tp_handle_ensure (contact_repo, who, NULL, NULL);
     g_assert (ui_data->contact_handle);
+
+    ui_ops = &ui_data->ui_ops;
+    ui_ops->destroy_conversation = haze_mu_destroy_conversation;
+    ui_ops->write_conv = haze_mu_write_conv;
+    ui_ops->write_chat = haze_mu_write_chat;
+    ui_ops->chat_add_users = haze_mu_chat_add_users;
+    ui_ops->chat_remove_users = haze_mu_chat_remove_users;
+
+    purple_conversation_set_ui_ops (conv, &ui_data->ui_ops);
+
+    conv->ui_data = ui_data;
 }
 
 static void
