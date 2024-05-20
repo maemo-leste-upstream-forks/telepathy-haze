@@ -269,6 +269,7 @@ haze_mu_channel_set_chat_state (TpSvcChannelInterfaceChatState *self,
     GError *error = NULL;
     PurpleTypingState typing = PURPLE_NOT_TYPING;
     guint timeout;
+    gboolean chat_active;
 
     g_assert (_chat_state_available (chan));
 
@@ -326,6 +327,13 @@ haze_mu_channel_set_chat_state (TpSvcChannelInterfaceChatState *self,
         ui_data->resend_typing_timeout_id = g_timeout_add (timeout * 1000,
             resend_typing_cb, conv);
     }
+
+    chat_active = state != TP_CHANNEL_CHAT_STATE_INACTIVE;
+
+    if (ui_data->chat_active != chat_active && chat_active)
+        purple_conversation_update(conv, PURPLE_CONV_UPDATE_UNSEEN);
+
+    ui_data->chat_active = chat_active;
 
     tp_svc_channel_interface_chat_state_return_from_set_chat_state (context);
 }

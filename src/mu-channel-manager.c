@@ -396,30 +396,38 @@ static void
 haze_mu_chat_add_users(PurpleConversation *conv, GList *cbuddies,
     gboolean new_arrivals)
 {
-    haze_mu_channel_add_users(haze_mu_get_chanel(conv), cbuddies, new_arrivals);
+    haze_mu_channel_add_users (haze_mu_get_chanel(conv), cbuddies, new_arrivals);
 }
 
 static void
 haze_mu_chat_remove_users(PurpleConversation *conv, GList *users)
 {
-    haze_mu_channel_remove_users(haze_mu_get_chanel(conv), users);
+    haze_mu_channel_remove_users (haze_mu_get_chanel(conv), users);
+}
+
+static gboolean
+haze_mu_chat_has_focus (PurpleConversation *conv)
+{
+    HazeConversationUiData *ui_data = PURPLE_CONV_GET_HAZE_UI_DATA (conv);
+
+    return ui_data->chat_active;
 }
 
 void
 haze_mu_create_conversation (PurpleConversation *conv)
 {
     PurpleAccount *account = purple_conversation_get_account (conv);
-
+    PurplePluginProtocolInfo *prpl_info =
+        PURPLE_PLUGIN_PROTOCOL_INFO (account->gc->prpl);
     HazeMuChannelManager *muc_manager =
         ACCOUNT_GET_HAZE_CONNECTION (account)->muc_manager;
     TpBaseConnection *base_conn = TP_BASE_CONNECTION (muc_manager->priv->conn);
     TpHandleRepoIface *contact_repo =
         tp_base_connection_get_handles (base_conn, TP_HANDLE_TYPE_CONTACT);
-
     const gchar *who = purple_conversation_get_name (conv);
-
     HazeConversationUiData *ui_data;
     PurpleConversationUiOps *ui_ops;
+
     DEBUG ("(PurpleConversation *)%p created", conv);
 
     g_assert (who);
@@ -434,6 +442,9 @@ haze_mu_create_conversation (PurpleConversation *conv)
     ui_ops->write_chat = haze_mu_write_chat;
     ui_ops->chat_add_users = haze_mu_chat_add_users;
     ui_ops->chat_remove_users = haze_mu_chat_remove_users;
+
+    if (prpl_info->send_typing != NULL)
+        ui_ops->has_focus = haze_mu_chat_has_focus;
 
     purple_conversation_set_ui_ops (conv, &ui_data->ui_ops);
 

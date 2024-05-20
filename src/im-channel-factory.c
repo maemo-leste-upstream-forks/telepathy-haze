@@ -421,19 +421,26 @@ haze_im_write_conv (PurpleConversation *conv,
     haze_im_write_im (conv, name, message, flags, mtime);
 }
 
+static gboolean
+haze_im_has_focus (PurpleConversation *conv)
+{
+    HazeConversationUiData *ui_data = PURPLE_CONV_GET_HAZE_UI_DATA (conv);
+
+    return ui_data->chat_active;
+}
+
 void
 haze_im_create_conversation (PurpleConversation *conv)
 {
     PurpleAccount *account = purple_conversation_get_account (conv);
-
+    PurplePluginProtocolInfo *prpl_info =
+        PURPLE_PLUGIN_PROTOCOL_INFO (account->gc->prpl);
     HazeImChannelFactory *im_factory =
         ACCOUNT_GET_HAZE_CONNECTION (account)->im_factory;
     TpBaseConnection *base_conn = TP_BASE_CONNECTION (im_factory->priv->conn);
     TpHandleRepoIface *contact_repo =
         tp_base_connection_get_handles (base_conn, TP_HANDLE_TYPE_CONTACT);
-
     const gchar *who = purple_conversation_get_name (conv);
-
     HazeConversationUiData *ui_data;
     PurpleConversationUiOps *ui_ops;
 
@@ -450,7 +457,11 @@ haze_im_create_conversation (PurpleConversation *conv)
     ui_ops->write_conv = haze_im_write_conv;
     ui_ops->write_im = haze_im_write_im;
 
+    if (prpl_info->send_typing != NULL)
+        ui_ops->has_focus = haze_im_has_focus;
+
     purple_conversation_set_ui_ops (conv, &ui_data->ui_ops);
+
     conv->ui_data = ui_data;
 }
 

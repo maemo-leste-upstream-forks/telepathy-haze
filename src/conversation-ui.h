@@ -37,6 +37,8 @@ struct _HazeConversationUiData
 
     PurpleTypingState active_state;
     guint resend_typing_timeout_id;
+
+    gboolean chat_active;
 };
 
 #define PURPLE_CONV_GET_HAZE_UI_DATA(conv) \
