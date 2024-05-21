@@ -1,3 +1,10 @@
+telepathy-haze (0.8.4-0) unstable; urgency=medium
+
+  * Support "message seen" functionality
+  * HazeIMChannel: Support PURPLE_MESSAGE_REMOTE_SEND
+
+ -- Ivaylo Dimitrov <ivo.g.dimitrov.75@gmail.com>  Tue, 21 May 2024 21:17:42 +0300
+
 telepathy-haze (0.8.3-0) unstable; urgency=medium
 
   * muc: fix target handle type
