@@ -77,7 +77,10 @@ void haze_mu_channel_receive (HazeMUChannel *self, const char *who,
 void haze_mu_channel_add_users (HazeMUChannel *self, GList *cbuddies,
     gboolean new_arrivals);
 
-void haze_mu_channel_remove_users(HazeMUChannel *self, GList *users);
+void haze_mu_channel_remove_users (HazeMUChannel *self, GList *users);
+
+void haze_mu_channel_pending_messages_removed (HazeMUChannel *self,
+                                               const GArray *ids);
 
 G_END_DECLS
 

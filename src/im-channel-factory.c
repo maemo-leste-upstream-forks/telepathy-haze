@@ -238,7 +238,7 @@ haze_im_channel_factory_class_init (HazeImChannelFactoryClass *klass)
 }
 
 static void
-im_channel_closed_cb (HazeIMChannel *chan, gpointer user_data)
+channel_closed_cb (HazeIMChannel *chan, gpointer user_data)
 {
     HazeImChannelFactory *self = HAZE_IM_CHANNEL_FACTORY (user_data);
     TpHandle contact_handle;
@@ -270,6 +270,13 @@ im_channel_closed_cb (HazeIMChannel *chan, gpointer user_data)
     }
 }
 
+static void
+channel_pending_messages_removed_cb (HazeIMChannel *chan, const GArray *ids,
+                                     gpointer user_data)
+{
+    haze_im_channel_pending_messages_removed(chan, ids);
+}
+
 static HazeIMChannel *
 new_im_channel (HazeImChannelFactory *self,
                 TpHandle handle,
@@ -299,7 +306,9 @@ new_im_channel (HazeImChannelFactory *self,
 
     DEBUG ("Created IM channel with object path %s", object_path);
 
-    g_signal_connect (chan, "closed", G_CALLBACK (im_channel_closed_cb), self);
+    g_signal_connect (chan, "closed", G_CALLBACK (channel_closed_cb), self);
+    g_signal_connect (chan, "pending-messages-removed",
+                      G_CALLBACK (channel_pending_messages_removed_cb), NULL);
 
     g_hash_table_insert (self->priv->channels, GINT_TO_POINTER (handle), chan);
 

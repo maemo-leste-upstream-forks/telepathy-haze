@@ -136,7 +136,7 @@ haze_mu_channel_manager_constructed (GObject *object)
 }
 
 static void
-mu_channel_closed_cb (HazeMUChannel *chan, gpointer user_data)
+channel_closed_cb (HazeMUChannel *chan, gpointer user_data)
 {
     HazeMuChannelManager *self = HAZE_MU_CHANNEL_MANAGER (user_data);
     TpHandle contact_handle;
@@ -168,6 +168,13 @@ mu_channel_closed_cb (HazeMUChannel *chan, gpointer user_data)
     }
 }
 
+static void
+channel_pending_messages_removed_cb (HazeMUChannel *chan, const GArray *ids,
+                                     gpointer user_data)
+{
+    haze_mu_channel_pending_messages_removed(chan, ids);
+}
+
 static HazeMUChannel *
 new_mu_channel (HazeMuChannelManager *self, TpHandle handle, TpHandle initiator,
     gpointer request_token)
@@ -195,7 +202,9 @@ new_mu_channel (HazeMuChannelManager *self, TpHandle handle, TpHandle initiator,
 
     DEBUG ("Created MU channel with object path %s", object_path);
 
-    g_signal_connect (chan, "closed", G_CALLBACK (mu_channel_closed_cb), self);
+    g_signal_connect (chan, "closed", G_CALLBACK (channel_closed_cb), self);
+    g_signal_connect (chan, "pending-messages-removed",
+                      G_CALLBACK (channel_pending_messages_removed_cb), NULL);
 
     g_hash_table_insert (self->priv->channels, GINT_TO_POINTER (handle), chan);
 
@@ -379,7 +388,6 @@ static void
 haze_mu_write_chat (PurpleConversation *conv, const char *who,
     const char *xhtml_message, PurpleMessageFlags flags, time_t mtime)
 {
-
     haze_mu_channel_receive (haze_mu_get_chanel(conv), who, xhtml_message,
                              flags, mtime);
 }

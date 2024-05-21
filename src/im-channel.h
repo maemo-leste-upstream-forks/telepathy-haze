@@ -73,6 +73,8 @@ void haze_im_channel_receive (HazeIMChannel *self, const char *who,
                               const char *xhtml_message,
                               PurpleMessageFlags flags, time_t mtime);
 
+void haze_im_channel_pending_messages_removed (HazeIMChannel *self,
+                                               const GArray *ids);
 
 G_END_DECLS
 

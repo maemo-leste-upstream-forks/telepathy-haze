@@ -157,10 +157,7 @@ _haze_im_channel_interfaces (HazeIMChannel *chan)
       NULL
   };
 
-  if (_chat_state_available (chan))
-    return interfaces;
-  else
-    return interfaces + 1;
+  return interfaces;
 }
 
 static void
@@ -249,25 +246,17 @@ resend_typing_cb (gpointer data)
     }
 }
 
-
-static void
-haze_im_channel_set_chat_state (TpSvcChannelInterfaceChatState *self,
-                                guint state,
-                                DBusGMethodInvocation *context)
+static gboolean
+_set_chat_state(PurpleConversation *conv,
+                guint state,
+                DBusGMethodInvocation *context)
 {
-    HazeIMChannel *chan = HAZE_IM_CHANNEL (self);
-
-    PurpleConversation *conv = chan->priv->conv;
     HazeConversationUiData *ui_data = PURPLE_CONV_GET_HAZE_UI_DATA (conv);
     PurpleConnection *gc = purple_conversation_get_gc (conv);
     const gchar *who = purple_conversation_get_name (conv);
-
     GError *error = NULL;
     PurpleTypingState typing = PURPLE_NOT_TYPING;
     guint timeout;
-    gboolean chat_active;
-
-    g_assert (_chat_state_available (chan));
 
     if (ui_data->resend_typing_timeout_id)
     {
@@ -303,7 +292,7 @@ haze_im_channel_set_chat_state (TpSvcChannelInterfaceChatState *self,
     {
           dbus_g_method_return_error (context, error);
           g_error_free (error);
-          return;
+          return FALSE;
     }
 
     DEBUG ("sending '%s' to %s", typing_state_names[typing], who);
@@ -324,12 +313,26 @@ haze_im_channel_set_chat_state (TpSvcChannelInterfaceChatState *self,
             resend_typing_cb, conv);
     }
 
-    chat_active = state != TP_CHANNEL_CHAT_STATE_INACTIVE;
+    return TRUE;
+}
 
-    if (ui_data->chat_active != chat_active && chat_active)
+static void
+haze_im_channel_set_chat_state (TpSvcChannelInterfaceChatState *self,
+                                guint state,
+                                DBusGMethodInvocation *context)
+{
+    HazeIMChannel *chan = HAZE_IM_CHANNEL (self);
+    PurpleConversation *conv = chan->priv->conv;
+    HazeConversationUiData *ui_data = PURPLE_CONV_GET_HAZE_UI_DATA (conv);
+    gboolean chat_active = state != TP_CHANNEL_CHAT_STATE_INACTIVE;
+
+    if (chat_active && ui_data->chat_active != chat_active)
         purple_conversation_update(conv, PURPLE_CONV_UPDATE_UNSEEN);
 
     ui_data->chat_active = chat_active;
+
+    if (_chat_state_available (chan) && !_set_chat_state (conv, state, context))
+        return;
 
     tp_svc_channel_interface_chat_state_return_from_set_chat_state (context);
 }
@@ -841,4 +844,15 @@ haze_im_channel_receive (HazeIMChannel *self,
         self->priv->handle, text_plain, flags);
 
   g_free (text_plain);
+}
+
+void
+haze_im_channel_pending_messages_removed (HazeIMChannel *self,
+                                          const GArray *ids)
+{
+    PurpleConversation *conv = self->priv->conv;
+    HazeConversationUiData *ui_data = PURPLE_CONV_GET_HAZE_UI_DATA (conv);
+
+    if (ui_data->chat_active)
+        purple_conversation_update(conv, PURPLE_CONV_UPDATE_UNSEEN);
 }
