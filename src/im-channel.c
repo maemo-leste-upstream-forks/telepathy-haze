@@ -800,6 +800,7 @@ _make_delivery_report (HazeIMChannel *self,
 
 void
 haze_im_channel_receive (HazeIMChannel *self,
+                         const char *who,
                          const char *xhtml_message,
                          PurpleMessageFlags flags,
                          time_t mtime)
@@ -817,9 +818,21 @@ haze_im_channel_receive (HazeIMChannel *self,
     tp_message_mixin_take_received ((GObject *) self,
         _make_message (self, text_plain, flags, mtime));
   else if (flags & PURPLE_MESSAGE_SEND)
+  {
+    if (flags & PURPLE_MESSAGE_REMOTE_SEND)
     {
-      /* Do nothing: the message mixin emitted sent for us. */
+      HazeIMChannelPrivate *priv = self->priv;
+      TpMessage *message = _make_message (self, text_plain, flags, mtime);
+      TpBaseConnection *conn = (TpBaseConnection *) (priv->conn);
+      TpHandleRepoIface *contact_handles =
+          tp_base_connection_get_handles (conn, TP_HANDLE_TYPE_CONTACT);
+      TpHandle handle = tp_handle_ensure (contact_handles, who, NULL, NULL);
+
+      tp_cm_message_set_sender (message, handle);
+      tp_message_set_boolean (message, 0, "scrollback", TRUE);
+      tp_message_mixin_take_received ((GObject *) self, message);
     }
+  }
   else if (flags & PURPLE_MESSAGE_ERROR)
     tp_message_mixin_take_received ((GObject *) self,
         _make_delivery_report (self, text_plain));

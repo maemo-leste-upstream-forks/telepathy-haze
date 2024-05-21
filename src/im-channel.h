@@ -69,8 +69,10 @@ GType haze_im_channel_get_type (void);
 
 void haze_im_channel_start (HazeIMChannel *self);
 
-void haze_im_channel_receive (HazeIMChannel *self, const char *xhtml_message,
-    PurpleMessageFlags flags, time_t mtime);
+void haze_im_channel_receive (HazeIMChannel *self, const char *who,
+                              const char *xhtml_message,
+                              PurpleMessageFlags flags, time_t mtime);
+
 
 G_END_DECLS
 

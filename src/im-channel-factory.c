@@ -407,7 +407,7 @@ haze_im_write_im (PurpleConversation *conv,
     HazeIMChannel *chan = get_im_channel (im_factory, ui_data->contact_handle,
         ui_data->contact_handle, NULL, NULL);
 
-    haze_im_channel_receive (chan, xhtml_message, flags, mtime);
+    haze_im_channel_receive (chan, who, xhtml_message, flags, mtime);
 }
 
 static void
