@@ -761,11 +761,11 @@ _make_message (HazeIMChannel *self,
   tp_cm_message_set_sender (message, self->priv->handle);
   tp_message_set_uint32 (message, 0, "message-type", type);
 
-  /* FIXME: the second half of this test shouldn't be necessary but prpl-jabber
-   *        or the test are broken.
-   */
-  if (flags & PURPLE_MESSAGE_DELAYED || mtime != now)
-    tp_message_set_int64 (message, 0, "message-sent", mtime);
+  if (flags & PURPLE_MESSAGE_DELAYED)
+    tp_message_set_boolean (message, 0, "scrollback", TRUE);
+
+  if (mtime)
+      tp_message_set_int64 (message, 0, "message-sent", mtime);
 
   tp_message_set_int64 (message, 0, "message-received", now);
 

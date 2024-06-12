@@ -799,6 +799,9 @@ _make_message (HazeMUChannel *self, char *text_plain, PurpleMessageFlags flags,
     tp_message_set_uint32 (message, 0, "message-type", type);
 
     if (flags & PURPLE_MESSAGE_DELAYED)
+        tp_message_set_boolean (message, 0, "scrollback", TRUE);
+
+    if (mtime)
         tp_message_set_int64 (message, 0, "message-sent", mtime);
 
     tp_message_set_int64 (message, 0, "message-received", now);
