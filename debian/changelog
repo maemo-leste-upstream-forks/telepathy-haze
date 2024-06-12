@@ -1,3 +1,9 @@
+telepathy-haze (0.8.5-0) unstable; urgency=medium
+
+  * im/mu: mark PURPLE_MESSAGE_DELAYED messages as scrollback
+
+ -- Ivaylo Dimitrov <ivo.g.dimitrov.75@gmail.com>  Wed, 12 Jun 2024 14:20:41 +0300
+
 telepathy-haze (0.8.4-0) unstable; urgency=medium
 
   * Support "message seen" functionality
